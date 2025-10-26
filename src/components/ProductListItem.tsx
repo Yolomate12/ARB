@@ -6,6 +6,9 @@ import { Product } from '../types';
 export const defaultPizzaImage =
     'https://notjustdev-dummy.s3.us-east-2.amazonaws.com/food/default.png'
 
+export const addImage = 
+    'https://img.freepik.com/premium-vector/add-image-icon-isolated-white-background_268104-12634.jpg'
+
 
 type ProductListItemProps = {
     product: Product;
