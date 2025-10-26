@@ -1,8 +1,10 @@
 import { defaultPizzaImage } from '@/components/ProductListItem';
+import Colors from '@/constants/Colors';
 import products from '@assets/data/products';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { FontAwesome } from '@expo/vector-icons';
+import { Link, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 const sizes = ['S', 'M', 'L', 'XL'];
 
@@ -24,6 +26,25 @@ const ProductDetailsScreen = () => {
 
   return (
     <View style={styles.container}>
+
+    <Stack.Screen 
+      options={{title: 'Menu', 
+      headerRight: () => (
+            <Link href={`/(admin)/menu/create?id=${id}`} asChild>
+              <Pressable>
+                {({ pressed }) => (
+                  <FontAwesome
+                    name="pencil"
+                    size={25}
+                    color={Colors.light.tint}
+                    style={{ marginRight: 15,opacity: pressed ? 0.5 : 1 }}
+                  />
+                )}
+              </Pressable>
+            </Link>
+          ),}}/>
+
+
       <Stack.Screen options={{title: product?.name}} />
 
       <Image source={{ uri: product.image || defaultPizzaImage}} style={styles.image} />
