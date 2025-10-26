@@ -1,5 +1,5 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createClient } from "@supabase/supabase-js";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createClient } from '@supabase/supabase-js';
 import * as aesjs from 'aes-js';
 import * as SecureStore from 'expo-secure-store';
 import 'react-native-get-random-values';
@@ -50,10 +50,10 @@ class LargeSecureStore {
   }
 }
 
-const supabaseUrl = 'https://heahkxgngnnhugdsurfl.supabase.co';
-const supabasePublishableKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhlYWhreGduZ25uaHVnZHN1cmZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2MDE2MzAsImV4cCI6MjA3NjE3NzYzMH0.j8Fq998AwsJ_pTfVirUVBjQqtJnESovekfuNf_viTmc';
+const supabaseUrl = 'https://heahkxgngnnhugdsurfl.supabase.co'
+const supabasePublishableKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhlYWhreGduZ25uaHVnZHN1cmZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2MDE2MzAsImV4cCI6MjA3NjE3NzYzMH0.j8Fq998AwsJ_pTfVirUVBjQqtJnESovekfuNf_viTmc'
 
-const supabase = createClient(supabaseUrl, supabasePublishableKey, {
+export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
   auth: {
     storage: new LargeSecureStore(),
     autoRefreshToken: true,
