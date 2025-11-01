@@ -1,21 +1,40 @@
 import { supabase } from '@/lib/supabase';
-import { Link, Stack } from 'expo-router';
+import { useAuth } from '@/providers/AuthProvider';
+import { Link, Stack, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, View } from 'react-native';
 import Button from '../../components/Button';
 import Colors from '../../constants/Colors';
 
 const SignInScreen = () => {
+  const { fetchProfile } = useAuth(); // načítanie profilu
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  
-    async function signInWithEmail() {
-      setLoading(true);
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) Alert.alert(error.message);
+  const [fetchingProfile, setFetchingProfile] = useState(false); // indikátor načítavania profilu
+
+  const signInWithEmail = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      Alert.alert(error.message);
       setLoading(false);
+      return;
     }
+
+    if (data.user) {
+      // Po prihlásení spustíme načítanie profilu
+      setFetchingProfile(true);
+      await fetchProfile(data.user.id);
+      setFetchingProfile(false);
+
+    
+    }
+
+    setLoading(false);
+  };
 
   return (
     <View style={styles.container}>
@@ -38,7 +57,16 @@ const SignInScreen = () => {
         secureTextEntry
       />
 
-      <Button onPress={signInWithEmail} disabled={loading} text={ loading ? "Sign in..." : 'Sign in'} />
+      {fetchingProfile ? (
+        <ActivityIndicator size="large" color={Colors.light.tint} style={{ marginVertical: 20 }} />
+      ) : (
+        <Button
+          onPress={signInWithEmail}
+          disabled={loading}
+          text={loading ? "Signing in..." : 'Sign in'}
+        />
+      )}
+
       <Link href="/sign-up" style={styles.textButton}>
         Create an account
       </Link>
