@@ -1,82 +1,70 @@
-import { defaultPizzaImage } from '@/components/ProductListItem';
-import Colors from '@/constants/Colors';
-import products from '@assets/data/products';
-import { FontAwesome } from '@expo/vector-icons';
-import { Link, Stack, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { supabase } from '@/lib/supabase'
+import { Stack, useLocalSearchParams } from 'expo-router'
+import { useEffect, useState } from 'react'
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 
-const sizes = ['S', 'M', 'L', 'XL'];
+type KosItem = {
+  id: number
+  nazov: string
+  miesto: string
+  popis?: string
+  stav?: string
+}
 
-const ProductDetailsScreen = () => {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  
-  const addToCart = () => {
-    console.warn('adding to cart, size', selectedSize)
-  }
+export default function KosDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>()
+  const [kos, setKos] = useState<KosItem | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const [selectedSize, setSelectedSize] = useState('XL')
+  useEffect(() => {
+    const fetchKos = async () => {
+      const { data, error } = await supabase
+        .from('Kos')
+        .select('*')
+        .eq('id', id)
+        .single()
 
-  const product = products.find((p) => p.id.toString() === id);
+      if (error) setError(error.message)
+      else setKos(data)
+      setLoading(false)
+    }
 
-  if (!product) {
-    return <Text>Not find</Text>
-  }
-  
+    fetchKos()
+  }, [id])
+
+  if (loading) return <ActivityIndicator size="large" color="#007AFF" />
+  if (error) return <Text>Chyba: {error}</Text>
+  if (!kos) return <Text>Koš sa nenašiel</Text>
 
   return (
     <View style={styles.container}>
-
-    <Stack.Screen 
-      options={{title: 'Menu', 
-      headerRight: () => (
-            <Link href={`/(admin)/menu/create?id=${id}`} asChild>
-              <Pressable>
-                {({ pressed }) => (
-                  <FontAwesome
-                    name="pencil"
-                    size={25}
-                    color={Colors.light.tint}
-                    style={{ marginRight: 15,opacity: pressed ? 0.5 : 1 }}
-                  />
-                )}
-              </Pressable>
-            </Link>
-          ),}}/>
-
-
-      <Stack.Screen options={{title: product?.name}} />
-
-      <Image source={{ uri: product.image || defaultPizzaImage}} style={styles.image} />
-
-      
-
-      <Text style={styles.title}>{product.name}</Text>
-      <Text style={styles.price}>{product.price}</Text>
-     
+      <Stack.Screen options={{ title: kos.nazov }} />
+      <Text style={styles.title}>{kos.nazov}</Text>
+      <Text style={styles.label}>Miesto: {kos.miesto}</Text>
+      {kos.popis && <Text style={styles.text}>{kos.popis}</Text>}
+      {kos.stav && <Text style={styles.text}>Stav: {kos.stav}</Text>}
     </View>
-  );
-};
+  )
+}
 
 const styles = StyleSheet.create({
   container: {
     backgroundColor: 'white',
     flex: 1,
-    padding: 10,
-  },
-  image: {
-    width: '100%',
-    aspectRatio: 1,
+    padding: 20,
   },
   title: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
+    marginBottom: 10,
   },
-  price: {
-    fontSize: 20,
-    fontWeight: 'bold',
+  label: {
+    fontSize: 16,
+    marginBottom: 5,
   },
- 
+  text: {
+    fontSize: 14,
+    color: '#444',
+  },
 })
-
-export default ProductDetailsScreen;

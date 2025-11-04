@@ -1,96 +1,70 @@
-import Button from '@/components/Button';
-import { defaultPizzaImage } from '@/components/ProductListItem';
-import products from '@assets/data/products';
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { supabase } from '@/lib/supabase'
+import { Stack, useLocalSearchParams } from 'expo-router'
+import { useEffect, useState } from 'react'
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 
-const sizes = ['S', 'M', 'L', 'XL'];
+type KosItem = {
+  id: number
+  nazov: string
+  miesto: string
+  popis?: string
+  stav?: string
+}
 
-const ProductDetailsScreen = () => {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  
-  const addToCart = () => {
-    console.warn('adding to cart, size', selectedSize)
-  }
+export default function KosDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>()
+  const [kos, setKos] = useState<KosItem | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const [selectedSize, setSelectedSize] = useState('XL')
+  useEffect(() => {
+    const fetchKos = async () => {
+      const { data, error } = await supabase
+        .from('Kos')
+        .select('*')
+        .eq('id', id)
+        .single()
 
-  const product = products.find((p) => p.id.toString() === id);
+      if (error) setError(error.message)
+      else setKos(data)
+      setLoading(false)
+    }
 
-  if (!product) {
-    return <Text>Not find</Text>
-  }
-  
+    fetchKos()
+  }, [id])
+
+  if (loading) return <ActivityIndicator size="large" color="#007AFF" />
+  if (error) return <Text>Chyba: {error}</Text>
+  if (!kos) return <Text>Koš sa nenašiel</Text>
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{title: product?.name}} />
-
-      <Image source={{ uri: product.image || defaultPizzaImage}} style={styles.image} />
-
-      <Text>Select size</Text>
-      <View style={styles.sizes}>
-        {sizes.map(size => (
-        <Pressable 
-        onPress={() => { 
-          setSelectedSize(size);
-        }}
-        style={[styles.size,
-          {
-            backgroundColor: selectedSize === size ? 'gainsboro' : 'white'
-          },
-          ]} key={size}>
-          <Text style={[
-            styles.sizeText,
-            {
-              color: selectedSize === size ? 'black' : 'gray'
-            }
-            ]} >{size}</Text>
-        </Pressable>
-      ))}
+      <Stack.Screen options={{ title: kos.nazov }} />
+      <Text style={styles.title}>{kos.nazov}</Text>
+      <Text style={styles.label}>Miesto: {kos.miesto}</Text>
+      {kos.popis && <Text style={styles.text}>{kos.popis}</Text>}
+      {kos.stav && <Text style={styles.text}>Stav: {kos.stav}</Text>}
     </View>
-
-
-      <Text style={styles.price}>{product.price}</Text>
-      <Button onPress={addToCart} text='Add to cart'/>
-    </View>
-  );
-};
+  )
+}
 
 const styles = StyleSheet.create({
   container: {
     backgroundColor: 'white',
     flex: 1,
-    padding: 10,
+    padding: 20,
   },
-  image: {
-    width: '100%',
-    aspectRatio: 1,
-  },
-  price: {
-    fontSize: 20,
+  title: {
+    fontSize: 22,
     fontWeight: 'bold',
-    marginTop: 'auto',
+    marginBottom: 10,
   },
-  sizes: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginVertical: 10,
+  label: {
+    fontSize: 16,
+    marginBottom: 5,
   },
-  size: {
-    backgroundColor: 'gainsboro',
-    width: 50,
-    aspectRatio: 1,
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-
-  },
-  sizeText: {
-    fontSize: 20,
-    fontWeight: 500,
+  text: {
+    fontSize: 14,
+    color: '#444',
   },
 })
-
-export default ProductDetailsScreen;
