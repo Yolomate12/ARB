@@ -2,8 +2,8 @@ import { useColorScheme } from '@/components/useColorScheme';
 import Colors from '@/constants/Colors';
 import { useAuth } from '@/providers/AuthProvider';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { Link, Redirect, Tabs } from 'expo-router';
-import React from 'react';
+import { Link, Tabs, useRouter } from 'expo-router';
+import React, { useEffect } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 
 function TabBarIcon(props: {
@@ -16,20 +16,45 @@ function TabBarIcon(props: {
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const { session, profile, isAdmin, loading } = useAuth();
+  const router = useRouter();
+
+  // Ak sa user odhlási, pošli ho na prihlasovaciu obrazovku
+  useEffect(() => {
+    if (!loading && !session) {
+      router.replace('/(auth)/sign-in');
+    }
+  }, [loading, session]);
 
   // Počkáme, kým sa načíta session aj profil
   const ready = !loading && !!session && profile !== null;
 
-  if (!ready) {
+  // Debug log, keď sa admin prihlási
+  useEffect(() => {
+    if (ready && isAdmin) {
+      console.log('✅ Admin sa prihlásil:', session?.user?.email);
+    }
+  }, [ready, isAdmin, session]);
+
+  // Loading stav
+  if (loading || !ready) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'white' }}>
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: 'white',
+        }}
+      >
         <ActivityIndicator size="large" color={Colors.light.tint} />
       </View>
     );
   }
 
+  // Ak nie je admin
   if (!isAdmin) {
-    return <Redirect href="/" />;
+    router.replace('/'); // redirect mimo admin sekcie
+    return null;
   }
 
   return (
@@ -68,8 +93,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="two"
         options={{
-          title: 'Orders',
-          tabBarIcon: ({ color }) => <TabBarIcon name="list" color={color} />,
+          title: 'Profile',
+          tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
         }}
       />
     </Tabs>

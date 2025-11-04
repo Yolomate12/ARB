@@ -1,35 +1,37 @@
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
-import { Link, Redirect } from 'expo-router';
-import React from 'react';
+import { useRouter } from 'expo-router';
+import React, { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import Button from '../components/Button';
 
-const index = () => {
-  const {session, loading, isAdmin} = useAuth();
+export default function Index() {
+  const { session, loading, isAdmin, profile } = useAuth();
+  const router = useRouter();
 
-  if (loading) {
-    return <ActivityIndicator/>;
-  }
+  useEffect(() => {
+    // ⏳ Počkaj, kým sa načíta profil a skončí loading
+    if (loading) return;
 
-  if (!session) {
-    return <Redirect href={'/sign-in'}/>
-  }
+    // 🚪 Ak nie je používateľ prihlásený, pošli ho na sign-in
+    if (!session) {
+      router.replace('/sign-in');
+      return;
+    }
 
-  if (!isAdmin) {
-    return <Redirect href={'/(user)'} />
-  }
+    // ⚙️ Keď profil ešte nie je načítaný, nepresmeruj
+    if (!profile) return;
+
+    // 👑 Presmeruj podľa roly
+    if (isAdmin) {
+      router.replace('/(admin)');
+    } else {
+      router.replace('/(user)');
+    }
+  }, [session, loading, profile, isAdmin]);
+
+  // ⏱️ Zatiaľ zobraz loading
   return (
-    <View style={{ flex: 1, justifyContent: 'center', padding: 10 }}>
-      <Link href={'/(user)'} asChild>
-        <Button text="User" />
-      </Link>
-      <Link href={'/(admin)'} asChild>
-        <Button text="Admin" />
-      </Link>
-      <Button onPress={() => supabase.auth.signOut()} text="Sign out" />
+    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <ActivityIndicator size="large" />
     </View>
   );
-};
-
-export default index;
+}

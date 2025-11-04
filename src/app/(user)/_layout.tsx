@@ -18,7 +18,7 @@ export default function TabLayout() {
   const {session} = useAuth();
 
   if (!session) {
-    return <Redirect href={'/'} />
+    return <Redirect href={'/(auth)/sign-in'} />
   }
 
   return (
@@ -39,14 +39,15 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
         }}
       />
+      
 
         
 
       <Tabs.Screen
         name="two"
         options={{
-          title: 'orders',
-          tabBarIcon: ({ color }) => <TabBarIcon name="list" color={color} />,
+          title: 'Profile',
+          tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
         }}
       />
     </Tabs>

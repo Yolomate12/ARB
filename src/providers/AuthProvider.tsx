@@ -60,14 +60,17 @@ export default function AuthProvider({ children }: PropsWithChildren) {
     init();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
+  setSession(session);
 
-      if (session?.user) {
-        await fetchProfile(session.user.id);
-      } else {
-        setProfile(null);
-      }
-    });
+  // ak sa user odhlásil, len vymaž profil a nefetchuj
+  if (!session) {
+    setProfile(null);
+    return;
+  }
+
+  // ak je user prihlásený, fetchni profil
+  await fetchProfile(session.user.id);
+  });
 
     return () => authListener.subscription.unsubscribe();
   }, []);

@@ -1,14 +1,28 @@
-import { StyleSheet } from 'react-native';
-
-import EditScreenInfo from '@/components/EditScreenInfo';
-import { Text, View } from '@/components/Themed';
+import Button from '@/components/Button';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/providers/AuthProvider';
+import { useRouter } from 'expo-router';
+import { Image, StyleSheet, Text, View } from 'react-native';
 
 export default function TabTwoScreen() {
+  const router = useRouter();
+   const { session} = useAuth();
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.replace('/(auth)/sign-in'); // okamžitý redirect na login
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Tab Two</Text>
-      <View style={styles.separator} lightColor="#eee" darkColor="rgba(255,255,255,0.1)" />
-      <EditScreenInfo path="app/(user)/two.tsx" />
+      <Text style={styles.title}>PROFILE</Text>
+      <Text style={styles.mail}>{session?.user?.email}</Text>
+      <Image
+        source={require('../../../assets/images/profile.jpg')}
+        style={styles.image}
+        resizeMode="cover"
+      />
+      <Button onPress={handleSignOut} text="Sign out" />
     </View>
   );
 }
@@ -17,15 +31,19 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   title: {
-    fontSize: 20,
+    fontSize: 30,
     fontWeight: 'bold',
+    marginTop: 50,
   },
-  separator: {
-    marginVertical: 30,
-    height: 1,
-    width: '80%',
+  image: {
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    marginVertical: 20,
+  },
+   mail: {
+
   },
 });
