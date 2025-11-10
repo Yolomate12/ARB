@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { Session } from "@supabase/supabase-js";
-import { createContext, PropsWithChildren, useContext, useEffect, useState } from "react";
+import { createContext, PropsWithChildren, useContext, useEffect, useRef, useState } from "react";
 
 type Profile = {
   id: string;
@@ -28,6 +28,7 @@ export default function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const initDone = useRef(false); // 🔒 ochrana proti duplicitnému initu
 
   const fetchProfile = async (userId?: string) => {
     const id = userId || session?.user?.id;
@@ -44,6 +45,9 @@ export default function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const init = async () => {
+      if (initDone.current) return; // 🔒 iba raz
+      initDone.current = true;
+
       setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
@@ -53,32 +57,39 @@ export default function AuthProvider({ children }: PropsWithChildren) {
       } else {
         setProfile(null);
       }
-
       setLoading(false);
     };
 
     init();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-  setSession(session);
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        // 👇 Zabránime dvom rýchlym redirectom
+        setLoading(true);
+        setSession(session);
 
-  // ak sa user odhlásil, len vymaž profil a nefetchuj
-  if (!session) {
-    setProfile(null);
-    return;
-  }
+        if (!session) {
+          setProfile(null);
+          setLoading(false);
+          return;
+        }
 
-  // ak je user prihlásený, fetchni profil
-  await fetchProfile(session.user.id);
-  });
+        await fetchProfile(session.user.id);
+        setLoading(false);
+      }
+    );
 
-    return () => authListener.subscription.unsubscribe();
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, []);
 
   const isAdmin = profile?.group === "ADMIN";
 
   return (
-    <AuthContext.Provider value={{ session, profile, loading, isAdmin, fetchProfile }}>
+    <AuthContext.Provider
+      value={{ session, profile, loading, isAdmin, fetchProfile }}
+    >
       {children}
     </AuthContext.Provider>
   );

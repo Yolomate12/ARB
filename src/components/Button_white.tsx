@@ -6,7 +6,7 @@ type ButtonProps = {
   text: string;
 } & React.ComponentPropsWithoutRef<typeof Pressable>;
 
-const Button = forwardRef<View | null, ButtonProps>(
+const WButton = forwardRef<View | null, ButtonProps>(
   ({ text, ...pressableProps }, ref) => {
     return (
       <Pressable
@@ -32,8 +32,8 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 16,
     fontWeight: '600',
-    
+    color: 'white',
   },
 });
 
-export default Button;
+export default WButton;

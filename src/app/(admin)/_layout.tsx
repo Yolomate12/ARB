@@ -3,39 +3,53 @@ import Colors from '@/constants/Colors';
 import { useAuth } from '@/providers/AuthProvider';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Link, Tabs, useRouter } from 'expo-router';
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 
-function TabBarIcon(props: {
+function TabBarIcon({
+  name,
+  color,
+}: {
   name: React.ComponentProps<typeof FontAwesome>['name'];
   color: string;
 }) {
-  return <FontAwesome size={25} style={{ marginBottom: -3 }} {...props} />;
+  return <FontAwesome size={25} style={{ marginBottom: -3 }} name={name} color={color} />;
 }
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const { session, profile, isAdmin, loading } = useAuth();
   const router = useRouter();
+  const redirected = useRef(false);
 
-  // Ak sa user odhlási, pošli ho na prihlasovaciu obrazovku
+  // ✅ Redirect len po načítaní auth stavu
   useEffect(() => {
-    if (!loading && !session) {
+    if (loading) return; // čakáme, kým sa načíta
+    if (!session && !redirected.current) {
+      redirected.current = true;
       router.replace('/(auth)/sign-in');
     }
   }, [loading, session]);
 
-  // Počkáme, kým sa načíta session aj profil
+  // ✅ Ak nie je admin, presmeruj bezpečne
+  useEffect(() => {
+    if (!loading && session && profile && !isAdmin && !redirected.current) {
+      redirected.current = true;
+      router.replace('/');
+    }
+  }, [loading, session, profile, isAdmin]);
+
+  // 🔁 Počkáme, kým sa všetko načíta
   const ready = !loading && !!session && profile !== null;
 
-  // Debug log, keď sa admin prihlási
+  // 🧭 Debug info
   useEffect(() => {
     if (ready && isAdmin) {
       console.log('✅ Admin sa prihlásil:', session?.user?.email);
     }
   }, [ready, isAdmin, session]);
 
-  // Loading stav
+  // ⏳ Zobraz loading indikátor počas načítania
   if (loading || !ready) {
     return (
       <View
@@ -51,11 +65,8 @@ export default function TabLayout() {
     );
   }
 
-  // Ak nie je admin
-  if (!isAdmin) {
-    router.replace('/'); // redirect mimo admin sekcie
-    return null;
-  }
+  // 🔒 Ak redirect prebieha, nerenderuj nič
+  if (!session) return null;
 
   return (
     <Tabs

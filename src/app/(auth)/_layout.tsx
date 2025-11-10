@@ -9,7 +9,11 @@ const AuthLayout = () => {
     return <Redirect href={'/'} />;
   }
 
-  return <Stack />;
+  return (
+    <Stack>
+      <Stack.Screen name="mainPage" options={{ headerShown: false }} />
+    </Stack>
+  );
 };
 
 export default AuthLayout;

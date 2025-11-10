@@ -13,7 +13,7 @@ export default function Index() {
 
     // 🚪 Ak nie je používateľ prihlásený, pošli ho na sign-in
     if (!session) {
-      router.replace('/sign-in');
+      router.replace('/mainPage');
       return;
     }
 
