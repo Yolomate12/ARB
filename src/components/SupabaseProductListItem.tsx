@@ -2,12 +2,13 @@
 import { supabase } from '@/lib/supabase'
 import { Link } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native'
 
 type KosItem = {
   id: number
   nazov: string
   miesto: string
+  image_url?: string
 }
 
 export default function SupabaseProductListItem() {
@@ -34,9 +35,17 @@ export default function SupabaseProductListItem() {
       {items.map((item) => (
         <Link key={item.id} href={`/menu/${item.id}`} asChild>
           <Pressable style={styles.card}>
-            <Text style={styles.title}>{item.nazov}</Text>
-            <Text>Miesto: {item.miesto}</Text>
+            <ImageBackground
+              source={{ uri: item.image_url }}
+              style={styles.imageBackground}
+              imageStyle={{ borderRadius: 12 }}
+            >
+              <View style={styles.overlay} />
+              <Text style={styles.title}>{item.nazov}</Text>
+              <Text style={styles.subtitle}>Miesto: {item.miesto}</Text>
+            </ImageBackground>
           </Pressable>
+
         </Link>
       ))}
     </View>
@@ -45,17 +54,33 @@ export default function SupabaseProductListItem() {
 
 const styles = StyleSheet.create({
   container: {
-    gap: 10,
     padding: 10,
+    width: '95%',
+    alignSelf: 'center',
   },
   card: {
-    backgroundColor: '#fff',
-    padding: 15,
+    height: 150,
+    marginBottom: 10,
     borderRadius: 12,
+    overflow: 'hidden', // ensures rounded corners
     elevation: 2,
+  },
+  imageBackground: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    padding: 15,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject, // fills the entire ImageBackground
+    backgroundColor: 'rgba(255, 150,39, 0.73)', // black with 30% opacity
+    borderRadius: 12,
   },
   title: {
     fontSize: 18,
     fontWeight: 'bold',
+    color: '#fff',
+  },
+  subtitle: {
+    color: '#fff',
   },
 })
