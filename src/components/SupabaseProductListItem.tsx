@@ -1,26 +1,38 @@
-// components/SupabaseProductListItem.tsx
+// components/SupabaseDeviceListItem.tsx
 import { supabase } from '@/lib/supabase'
 import { Link } from 'expo-router'
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native'
+import {
+  ActivityIndicator,
+  ImageBackground,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native'
 
-type KosItem = {
-  id: number
-  nazov: string
-  miesto: string
-  image_url?: string
+type DeviceItem = {
+  id: string
+  name: string
+  status: string
+  last_seen: string
+  img: string
 }
 
-export default function SupabaseProductListItem() {
-  const [items, setItems] = useState<KosItem[]>([])
+export default function SupabaseDeviceListItem() {
+  const [items, setItems] = useState<DeviceItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data, error } = await supabase.from('Kos').select('*')
+      const { data, error } = await supabase
+        .from('devices')
+        .select('id, name, status, last_seen, img')
+
       if (error) setError(error.message)
-      else setItems(data || [])
+      else setItems(data ?? [])
+
       setLoading(false)
     }
 
@@ -33,54 +45,70 @@ export default function SupabaseProductListItem() {
   return (
     <View style={styles.container}>
       {items.map((item) => (
-        <Link key={item.id} href={`/menu/${item.id}`} asChild>
+        <Link
+          key={item.id}
+          href={{
+            pathname: '/menu/[id]',
+            params: { id: item.id },
+          }}
+          asChild
+        >
           <Pressable style={styles.card}>
             <ImageBackground
-              source={{ uri: item.image_url }}
-              style={styles.imageBackground}
-              imageStyle={{ borderRadius: 12 }}
+              source={{ uri: item.img }}
+              style={styles.image}
+              imageStyle={styles.imageBorder}
             >
+              {/* overlay pre lepšiu čitateľnosť textu */}
               <View style={styles.overlay} />
-              <Text style={styles.title}>{item.nazov}</Text>
-              <Text style={styles.subtitle}>Miesto: {item.miesto}</Text>
+
+              <View style={styles.content}>
+                <Text style={styles.title}>{item.name}</Text>
+                <Text style={styles.text}>Status: {item.status}</Text>
+                <Text style={styles.text}>
+                  Last seen: {new Date(item.last_seen).toLocaleString()}
+                </Text>
+              </View>
             </ImageBackground>
           </Pressable>
-
         </Link>
       ))}
     </View>
   )
 }
-
 const styles = StyleSheet.create({
   container: {
     padding: 10,
-    width: '95%',
-    alignSelf: 'center',
   },
   card: {
-    height: 150,
-    marginBottom: 10,
-    borderRadius: 12,
-    overflow: 'hidden', // ensures rounded corners
-    elevation: 2,
+    height: 160,
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 12,
+    elevation: 3,
   },
-  imageBackground: {
+  image: {
     flex: 1,
     justifyContent: 'flex-end',
-    padding: 15,
+  },
+  imageBorder: {
+    borderRadius: 14,
   },
   overlay: {
-    ...StyleSheet.absoluteFillObject, // fills the entire ImageBackground
-    backgroundColor: 'rgba(255, 150,39, 0.73)', // black with 30% opacity
-    borderRadius: 12,
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.4)', // stmavenie pozadia
+  },
+  content: {
+    padding: 14,
   },
   title: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
+    color: 'white',
   },
-  subtitle: {
-    color: '#fff',
+  text: {
+    color: 'white',
+    fontSize: 13,
   },
 })
+

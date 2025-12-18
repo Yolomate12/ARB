@@ -19,6 +19,8 @@ const ProductListItem = ({ product }: ProductListItemProps) => {
 
   const segments = useSegments();
   
+   console.warn('NAV ID:', product.id);
+  
 
   return (
     <Link href={`/${segments[0]}/menu/${product.id}`} asChild>
