@@ -2,11 +2,11 @@ import { supabase } from '@/lib/supabase'
 import { Link } from 'expo-router'
 import { useEffect, useState } from 'react'
 import {
-    ActivityIndicator,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native'
 
 type CityItem = {
@@ -21,15 +21,15 @@ export default function SupabaseCityListItem() {
   useEffect(() => {
     const fetchCities = async () => {
       const { data, error } = await supabase
-        .from('devices')
-        .select('nameOfCity')
+        .from('bin_full_info')
+        .select('name_city')
 
       if (error) {
         setError(error.message)
       } else {
         // odstránenie duplicít
         const uniqueCities = Array.from(
-          new Set(data?.map((item) => item.nameOfCity))
+          new Set(data?.map((item) => item.name_city))
         ).map((city) => ({ nameOfCity: city }))
 
         setCities(uniqueCities)

@@ -2,11 +2,11 @@ import { supabase } from '@/lib/supabase'
 import { Link, useLocalSearchParams } from 'expo-router'
 import { useEffect, useState } from 'react'
 import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  Text,
-  View,
+    ActivityIndicator,
+    FlatList,
+    Pressable,
+    Text,
+    View,
 } from 'react-native'
 
 type DeviceItem = {
