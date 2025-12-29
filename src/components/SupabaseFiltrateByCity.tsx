@@ -10,10 +10,10 @@ import {
 } from 'react-native'
 
 type CityItem = {
-  nameOfCity: string
+  name_city: string
 }
 
-export default function SupabaseCityListItem() {
+export default function CityListScreen() {
   const [cities, setCities] = useState<CityItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -27,10 +27,9 @@ export default function SupabaseCityListItem() {
       if (error) {
         setError(error.message)
       } else {
-        // odstránenie duplicít
         const uniqueCities = Array.from(
           new Set(data?.map((item) => item.name_city))
-        ).map((city) => ({ nameOfCity: city }))
+        ).map((city) => ({ name_city: city }))
 
         setCities(uniqueCities)
       }
@@ -48,15 +47,15 @@ export default function SupabaseCityListItem() {
     <View style={styles.container}>
       {cities.map((city) => (
         <Link
-          key={city.nameOfCity}
+          key={city.name_city}
           href={{
-            pathname: '/(admin)/menu/[city]',
-            params: { city: city.nameOfCity },
+            pathname: '/(admin)/menu/[city]/[street]',
+            params: { city: city.name_city },
           }}
           asChild
         >
           <Pressable style={styles.card}>
-            <Text style={styles.title}>{city.nameOfCity}</Text>
+            <Text style={styles.title}>{city.name_city}</Text>
           </Pressable>
         </Link>
       ))}
@@ -65,18 +64,12 @@ export default function SupabaseCityListItem() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 10,
-  },
+  container: { padding: 10 },
   card: {
     padding: 20,
     backgroundColor: '#1e1e1e',
     borderRadius: 12,
     marginBottom: 12,
   },
-  title: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
+  title: { color: 'white', fontSize: 18, fontWeight: 'bold' },
 })
