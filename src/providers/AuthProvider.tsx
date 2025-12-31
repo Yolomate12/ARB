@@ -1,6 +1,12 @@
 import { supabase } from "@/lib/supabase";
 import { Session } from "@supabase/supabase-js";
-import { createContext, PropsWithChildren, useContext, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  PropsWithChildren,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
 type Profile = {
   id: string;
@@ -13,7 +19,7 @@ type AuthData = {
   profile: Profile | null;
   loading: boolean;
   isAdmin: boolean;
-  fetchProfile: (userId?: string) => Promise<void>;
+  signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthData>({
@@ -21,66 +27,82 @@ const AuthContext = createContext<AuthData>({
   profile: null,
   loading: true,
   isAdmin: false,
-  fetchProfile: async () => {},
+  signOut: async () => {},
 });
 
 export default function AuthProvider({ children }: PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const initDone = useRef(false); // 🔒 ochrana proti duplicitnému initu
 
-  const fetchProfile = async (userId?: string) => {
-    const id = userId || session?.user?.id;
-    if (!id) return;
-
+  const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
-      .eq("id", id)
+      .eq("id", userId)
       .single();
 
-    setProfile(!error && data ? data : null);
+    if (error) {
+      setProfile(null);
+      return;
+    }
+
+    setProfile(data);
+  };
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setSession(null);
+    setProfile(null);
   };
 
   useEffect(() => {
     const init = async () => {
-      if (initDone.current) return; // 🔒 iba raz
-      initDone.current = true;
-
       setLoading(true);
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
 
-      if (session?.user) {
-        await fetchProfile(session.user.id);
+      const { data, error } = await supabase.auth.getSession();
+
+      if (error) {
+        // ⛔ neplatný refresh token → reset
+        await signOut();
+        setLoading(false);
+        return;
+      }
+
+      setSession(data.session);
+
+      if (data.session?.user) {
+        await fetchProfile(data.session.user.id);
       } else {
         setProfile(null);
       }
+
       setLoading(false);
     };
 
     init();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        // 👇 Zabránime dvom rýchlym redirectom
-        setLoading(true);
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        // 🔥 TOTO rieši tvoju chybu
+        if (event === "TOKEN_REFRESH_FAILED") {
+          await signOut();
+          return;
+        }
+
         setSession(session);
 
         if (!session) {
           setProfile(null);
-          setLoading(false);
           return;
         }
 
         await fetchProfile(session.user.id);
-        setLoading(false);
       }
     );
 
     return () => {
-      authListener.subscription.unsubscribe();
+      listener.subscription.unsubscribe();
     };
   }, []);
 
@@ -88,7 +110,7 @@ export default function AuthProvider({ children }: PropsWithChildren) {
 
   return (
     <AuthContext.Provider
-      value={{ session, profile, loading, isAdmin, fetchProfile }}
+      value={{ session, profile, loading, isAdmin, signOut }}
     >
       {children}
     </AuthContext.Provider>

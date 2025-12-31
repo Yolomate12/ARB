@@ -1,28 +1,55 @@
 import Colors from "@/constants/Colors";
-import { FontAwesome } from "@expo/vector-icons";
 import { Link, Stack } from "expo-router";
-import { Pressable } from "react-native";
+import { Image, Pressable, StyleSheet, View } from "react-native";
 
-export default function MenuStack(){
+export default function MenuStack() {
   return (
-  <Stack>
-    <Stack.Screen name="index" options={{title: 'Menu', 
-      headerRight: () => (
-            <Link href="/(admin)/menu/create" asChild>
+    <Stack>
+      <Stack.Screen
+        name="index"
+        options={{
+          title: '', // nechceme default title, môžeme použiť vlastný headerLeft
+          
+
+         
+          // Logo vľavo
+          headerLeft: () => (
+            <View style={styles.logoContainer}>
+              <Image
+                source={require('@assets/images/logo.png')} // uprav podľa cesty k tvojmu logu
+                style={styles.logo}
+              />
+            </View>
+          ),
+
+          // Options tlačidlo vpravo
+          headerRight: () => (
+            <Link href="/(admin)/two" asChild>
               <Pressable>
                 {({ pressed }) => (
-                  <FontAwesome
-                    name="plus-square-o"
-                    size={25}
-                    color={Colors.light.tint}
-                    style={{ marginRight: 15,opacity: pressed ? 0.5 : 1 }}
-                  />
+                  <View style={{ flexDirection: 'column', justifyContent: 'space-between', height: 12, paddingRight: 0, }}>
+                    <View style={{ height: 4, width: 23, backgroundColor: Colors.orange.background, borderRadius: 20, }} />
+                    <View style={{ height: 4, width: 23, backgroundColor: Colors.orange.background, borderRadius: 20, }} />
+                  </View>
                 )}
               </Pressable>
             </Link>
-          ),}}/>
-
-          
-  </Stack>
+          ),
+        }}
+      />
+    </Stack>
   );
 }
+
+const styles = StyleSheet.create({
+  logoContainer: {
+    marginLeft: 0,
+    marginTop: 0,
+    justifyContent: 'center',
+  },
+  logo: {
+    width: 55,
+    height: 55,
+    resizeMode: 'contain',
+  },
+});
