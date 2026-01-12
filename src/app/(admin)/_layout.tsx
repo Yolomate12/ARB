@@ -74,6 +74,8 @@ export default function TabLayout() {
         tabBarActiveTintColor: Colors.light.background,
         tabBarInactiveTintColor: 'gainsboro',
         tabBarStyle: { backgroundColor: Colors.light.tint },
+        tabBarStyle: { display: 'none' }, // tab bar je skrytá
+        headerShown: false,      
       }}
     >
       <Tabs.Screen name="index" options={{ href: null }} />

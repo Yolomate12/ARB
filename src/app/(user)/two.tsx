@@ -1,28 +1,28 @@
 import Button from '@/components/Button';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
-import { useRouter } from 'expo-router';
 import { Image, StyleSheet, Text, View } from 'react-native';
 
 export default function TabTwoScreen() {
-  const router = useRouter();
-   const { session} = useAuth();
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.replace('/(auth)/sign-in'); // okamžitý redirect na login
-  };
+  const { session, signOut } = useAuth();
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>PROFILE</Text>
-      <Text style={styles.mail}>{session?.user?.email}</Text>
+
+      <Text style={styles.mail}>
+        {session?.user?.email}
+      </Text>
+
       <Image
         source={require('../../../assets/images/profile.jpg')}
         style={styles.image}
         resizeMode="cover"
       />
-      <Button onPress={handleSignOut} text="Sign out" />
+
+      <Button
+        onPress={signOut}
+        text="Sign out"
+      />
     </View>
   );
 }
@@ -43,7 +43,8 @@ const styles = StyleSheet.create({
     borderRadius: 75,
     marginVertical: 20,
   },
-   mail: {
-
+  mail: {
+    marginTop: 10,
+    fontSize: 16,
   },
 });

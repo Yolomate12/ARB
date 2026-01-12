@@ -1,6 +1,5 @@
 import WButton from '@/components/Button_white';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/providers/AuthProvider';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Link, Stack, useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -8,32 +7,31 @@ import { ActivityIndicator, Alert, Dimensions, StyleSheet, Text, TextInput, View
 import Colors from '../../constants/Colors';
 
 const SignInScreen = () => {
-  const { fetchProfile } = useAuth(); // načítanie profilu
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [fetchingProfile, setFetchingProfile] = useState(false); // indikátor načítavania profilu
+  const [fetchingProfile, setFetchingProfile] = useState(false);
 
   const signInWithEmail = async () => {
-    setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
-    if (error) {
-      Alert.alert(error.message);
-      setLoading(false);
+    if (!email || !password) {
+      Alert.alert("Please enter email and password");
       return;
     }
 
-    if (data.user) {
-      // Po prihlásení spustíme načítanie profilu
-      setFetchingProfile(true);
-      await fetchProfile(data.user.id);
-      setFetchingProfile(false);
+    setLoading(true);
 
-    
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      Alert.alert(error.message);
     }
 
+    // ❗ ŽIADEN router.push TU
+    // AuthProvider + AuthGate to vyrieši
     setLoading(false);
   };
 
@@ -51,8 +49,11 @@ const SignInScreen = () => {
           onChangeText={setEmail}
           placeholder="jon@gmail.com"
           style={styles.input}
+          keyboardType="email-address"
+          autoCapitalize="none"
         />
       </View>
+
       <View>
         <View style={styles.containerValuePassword}></View>
         <Text style={styles.labelPassword}>Password</Text>
@@ -69,17 +70,17 @@ const SignInScreen = () => {
         <ActivityIndicator size="large" color={Colors.light.tint} style={{ marginVertical: 20 }} />
       ) : (
         <LinearGradient
-                colors={['#F95A00', '#FFBB00']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.gradientButton}
-              >
-        <WButton
-          onPress={signInWithEmail}
-          disabled={loading}
-          style={styles.button}
-          text={loading ? "Logining in..." : 'Log in'}
-        />
+          colors={['#F95A00', '#FFBB00']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradientButton}
+        >
+          <WButton
+            onPress={signInWithEmail}
+            disabled={loading}
+            style={styles.button}
+            text={loading ? "Logging in..." : 'Log in'}
+          />
         </LinearGradient>
       )}
 
@@ -91,8 +92,7 @@ const SignInScreen = () => {
   );
 };
 
-
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 const scale = width / 375;
 
 const styles = StyleSheet.create({
@@ -105,9 +105,8 @@ const styles = StyleSheet.create({
   welcomeText: {
     textAlign: 'center',
     fontSize: 32 * scale,
-    fontWeight: 'semibold',
+    fontWeight: '600',
     color: '#FA5F02',
-    alignItems: 'center',
     marginBottom: width * 0.3,
   },
   containerSignUp: {
@@ -118,76 +117,15 @@ const styles = StyleSheet.create({
     marginTop: width * 0.025,
     justifyContent: 'center',
   },
-  textAccount: {
-    fontWeight: 'regular',
-  },
-  link: {
-    fontWeight: 'bold',
-    color: '#F95E01',
-  },
-  button: {
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'transparent',
-  },
-  gradientButton: {
-    width: width * 0.9,
-    height: width * 0.14,
-    marginTop: width * 0.15,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  containerValue: {
-    position: 'absolute',
-    width: width * 0.3,
-    height: width * 0.05,
-    left: width * 0.05,
-    backgroundColor: 'white',
-    zIndex: 1,
-  },
-  containerValuePassword: {
-    position: 'absolute',
-    width: width * 0.22,
-    height: width * 0.05,
-    left: width * 0.05,
-    backgroundColor: 'white',
-    zIndex: 1,
-  },
-  labelPassword: {
-    position: 'absolute',
-    left: width * 0.08,
-    top: -width * 0.01,
-    zIndex: 2,
-    color: '#0A0A0A'
-  },
-  labelEmail: {
-    color: '#0A0A0A',
-    position:'absolute',
-    zIndex: 2,
-    left: width * 0.08,
-    top: -width * 0.01
-  },
-  label: {
-    color: 'gray',
-    //position:'absolute'
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#0A0A0A',
-    padding: 10,
-    borderRadius: 5,
-    marginTop: 5,
-    marginBottom: 20,
-    backgroundColor: 'white',
-    height: width * 0.14,
-  },
-  textButton: {
-    alignSelf: 'center',
-    fontWeight: 'bold',
-    marginVertical: 10,
-    
-  },
+  textAccount: { fontWeight: '400' },
+  link: { fontWeight: '700', color: '#F95E01' },
+  button: { height: '100%', justifyContent: 'center', alignItems: 'center', backgroundColor: 'transparent' },
+  gradientButton: { width: width * 0.9, height: width * 0.14, marginTop: width * 0.15, justifyContent: 'center', alignItems: 'center' },
+  containerValue: { position: 'absolute', width: width * 0.3, height: width * 0.05, left: width * 0.05, backgroundColor: 'white', zIndex: 1 },
+  containerValuePassword: { position: 'absolute', width: width * 0.22, height: width * 0.05, left: width * 0.05, backgroundColor: 'white', zIndex: 1 },
+  labelEmail: { color: '#0A0A0A', position:'absolute', zIndex: 2, left: width * 0.08, top: -width * 0.01 },
+  labelPassword: { position: 'absolute', left: width * 0.08, top: -width * 0.01, zIndex: 2, color: '#0A0A0A' },
+  input: { borderWidth: 1, borderColor: '#0A0A0A', padding: 10, borderRadius: 5, marginTop: 5, marginBottom: 20, backgroundColor: 'white', height: width * 0.14 },
 });
 
 export default SignInScreen;

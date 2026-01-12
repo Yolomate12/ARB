@@ -1,10 +1,10 @@
-import SupabaseFiltrateByCity from '@/components/SupabaseFiltrateByCity'
+import DeviceCount from '@/components/deviceCount'
 import { View } from 'react-native'
 
 export default function MenuScreen() {
   return (
     <View>
-      <SupabaseFiltrateByCity />
+      <DeviceCount/>
     </View>
   )
 }

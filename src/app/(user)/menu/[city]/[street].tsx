@@ -98,7 +98,7 @@ export default function StreetListScreen() {
           <Link
             key={street.name_street}
             href={{
-              pathname: '/(admin)/menu/[city]/[street]/devices',
+              pathname: '/(user)/menu/[city]/[street]/devices',
               params: { city, street: street.name_street },
             }}
             asChild
