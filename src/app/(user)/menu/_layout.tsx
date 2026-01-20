@@ -4,52 +4,63 @@ import { Image, Pressable, StyleSheet, View } from "react-native";
 
 export default function MenuStack() {
   return (
-    <Stack>
-      <Stack.Screen
-        name="index"
-        options={{
-          title: '', // nechceme default title, môžeme použiť vlastný headerLeft
-          
+    <Stack
+      screenOptions={{
+        title: "",
 
-         
-          // Logo vľavo
-          headerLeft: () => (
-            <View style={styles.logoContainer}>
-              <Image
-                source={require('@assets/images/logo.png')} // uprav podľa cesty k tvojmu logu
-                style={styles.logo}
-              />
-            </View>
-          ),
+        headerLeft: () => (
+          <View style={styles.headerItem}>
+            <Image
+              source={require("@assets/images/logo.png")}
+              style={styles.logo}
+            />
+          </View>
+        ),
 
-          // Options tlačidlo vpravo
-          headerRight: () => (
-            <Link href="/(user)/two" asChild>
-              <Pressable>
-                {({ pressed }) => (
-                  <View style={{ flexDirection: 'column', justifyContent: 'space-between', height: 12, paddingRight: 0, }}>
-                    <View style={{ height: 4, width: 23, backgroundColor: Colors.orange.background, borderRadius: 20, }} />
-                    <View style={{ height: 4, width: 23, backgroundColor: Colors.orange.background, borderRadius: 20, }} />
-                  </View>
-                )}
-              </Pressable>
-            </Link>
-          ),
-        }}
-      />
+        headerRight: () => (
+          <Link href="/(user)/two" asChild>
+            <Pressable>
+              <View style={styles.headerItem}>
+                <View style={styles.menuIcon}>
+                  <View style={styles.menuLine} />
+                  <View style={styles.menuLine} />
+                </View>
+              </View>
+            </Pressable>
+          </Link>
+        ),
+      }}
+    >
+      <Stack.Screen name="index" />
+      <Stack.Screen name="[city]/[street]" />
+      <Stack.Screen name="[city]/[street]/devices" />
     </Stack>
   );
 }
-
 const styles = StyleSheet.create({
-  logoContainer: {
-    marginLeft: 0,
-    marginTop: 0,
-    justifyContent: 'center',
+  headerItem: {
+    height: 44,               // 🔥 dôležité pre iOS "bublinu"
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 10,
   },
+
   logo: {
-    width: 55,
-    height: 55,
-    resizeMode: 'contain',
+    width: 50,
+    height: 50,
+    resizeMode: "contain",
+  },
+
+  menuIcon: {
+    flexDirection: "column",
+    justifyContent: "space-between",
+    height: 12,
+  },
+
+  menuLine: {
+    height: 4,
+    width: 23,
+    backgroundColor: Colors.orange.background,
+    borderRadius: 20,
   },
 });

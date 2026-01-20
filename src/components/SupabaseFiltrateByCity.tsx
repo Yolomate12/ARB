@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { Link } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -20,6 +21,8 @@ type CityItem = {
   latitude: number;
   longitude: number;
   organisation: string | null;
+  onlineCount: number;
+  offlineCount: number;
 };
 
 export default function CityListScreen() {
@@ -41,36 +44,44 @@ export default function CityListScreen() {
       try {
         setLoading(true);
 
-        // Načítame všetky biny pre organizáciu prihláseného užívateľa
         const { data, error } = await supabase
           .from("bin_full_info")
-          .select("name_city, name_street, nazov_org, latitude, longitude")
+          .select("name_city, name_street, nazov_org, latitude, longitude, status")
           .eq("id_org", profile.id_org);
 
         if (error) throw error;
 
         if (data && data.length > 0) {
-          // Vyberieme názov organizácie
+          // Názov organizácie
           const firstOrg = data.find(
             (item) => item.nazov_org && item.nazov_org.trim() !== ""
           )?.nazov_org;
 
           setOrganisationName(firstOrg ?? profile.organisation);
 
-          // Aggregácia miest a ulíc
+          // Agregácia miest a online/offline kontajnerov
           const cityMap = new Map<string, CityItem>();
+
           data.forEach((item) => {
             const existing = cityMap.get(item.name_city);
+            const isOnline = item.status === "online";
+
             if (!existing) {
               cityMap.set(item.name_city, {
                 name_city: item.name_city,
                 streets: item.name_street ? [item.name_street] : [],
-                latitude: item.latitude ?? 48.1486, // fallback Bratislava
+                latitude: item.latitude ?? 48.1486,
                 longitude: item.longitude ?? 17.1077,
                 organisation: item.nazov_org ?? null,
+                onlineCount: isOnline ? 1 : 0,
+                offlineCount: isOnline ? 0 : 1,
               });
-            } else if (item.name_street && !existing.streets.includes(item.name_street)) {
-              existing.streets.push(item.name_street);
+            } else {
+              if (item.name_street && !existing.streets.includes(item.name_street)) {
+                existing.streets.push(item.name_street);
+              }
+              if (isOnline) existing.onlineCount += 1;
+              else existing.offlineCount += 1;
             }
           });
 
@@ -104,14 +115,14 @@ export default function CityListScreen() {
     setFilteredCities(filtered);
   }, [search, cities]);
 
-  // Dynamické priblíženie/oddialenie mapy
+  // Dynamické priblíženie mapy
   useEffect(() => {
     if (mapRef.current && filteredCities.length > 0) {
       const coords = filteredCities.map((c) => ({
         latitude: c.latitude,
         longitude: c.longitude,
       }));
-      
+
       if (coords.length === 1) {
         mapRef.current.animateToRegion(
           {
@@ -172,14 +183,47 @@ export default function CityListScreen() {
               description={city.organisation ?? "Neznáma organizácia"}
             />
           ))}
-        </MapView>  
+        </MapView>
       )}
 
       {/* ORGANIZÁCIA */}
-      <View style={styles.section}>
+      <View style={[styles.bottomSection, styles.orgSection]}>
         <Text style={styles.orgName}>
-          ORGANIZÁCIA: {organisationName ?? "Nie je nastavená"}
+          {organisationName ?? "Nie je nastavená"}
         </Text>
+
+        <Text style={{fontSize: 14, fontWeight: 'bold', paddingTop: 10, paddingBottom: 10,}}>Vaše pobočky</Text>
+        {/* ZOZNAM MIEST */}
+        <View style={{ marginTop: 12 }}>
+          {filteredCities.map((city) => (
+            <Link
+              key={city.name_city}
+              href={{
+                pathname: "/(user)/menu/[city]/[street]",
+                params: { city: city.name_city },
+              }}
+              asChild
+            >
+              
+              <Pressable style={styles.card}>
+                <View style={styles.rowContent}>
+                  {/* 25 % box */}
+                  <View style={styles.leftBox}>
+                    <FontAwesome name="map-marker" size={24} color="white" />
+                  </View>
+
+                  {/* 75 % box */}
+                  <View style={styles.rightBox}>
+                    <Text style={styles.title}>{city.name_city}</Text>
+                    <Text>
+                      Online: {city.onlineCount}, Offline: {city.offlineCount}
+                    </Text>
+                  </View>
+                </View>
+              </Pressable>
+            </Link>
+          ))}
+        </View>
       </View>
 
       {/* LOADING */}
@@ -195,30 +239,6 @@ export default function CityListScreen() {
           <Text style={{ color: "red" }}>Chyba: {error}</Text>
         </View>
       )}
-
-      {/* ZOZNAM MIEST */}
-      <View style={styles.section}>
-        {filteredCities.map((city) => (
-          <Link
-            key={city.name_city}
-            href={{
-              pathname: "/(user)/menu/[city]/[street]",
-              params: { city: city.name_city },
-            }}
-            asChild
-          >
-            <Pressable style={styles.card}>
-              <View style={styles.overlay} />
-              <View style={styles.textBox}>
-                <View style={{ width: "25%" }}></View>
-                <View style={{ width: "75%" }}>
-                  <Text style={styles.title}>{city.name_city}</Text>
-                </View>
-              </View>
-            </Pressable>
-          </Link>
-        ))}
-      </View>
     </ScrollView>
   );
 }
@@ -227,21 +247,16 @@ const { width, height } = Dimensions.get("window");
 const scale = width / 375;
 
 const styles = StyleSheet.create({
-  container: { flexGrow: 0, backgroundColor: "white" },
+  container: { flexGrow: 1, backgroundColor: "white" },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
-
   section: { paddingHorizontal: 12, marginBottom: 12 },
-
-  orgName: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#FF9627",
-  },
 
   searchBar: {
     height: 50,
-    backgroundColor: "#1e1e1e",
+    backgroundColor: "#F6F6F6",
     borderRadius: 8,
+    borderColor: "#E2E2E2",
+    borderWidth: 1,
     paddingHorizontal: 16,
     marginTop: 10,
     color: "white",
@@ -251,41 +266,74 @@ const styles = StyleSheet.create({
   map: {
     width: "100%",
     height: 250,
-    borderRadius: 12,
+    borderRadius: 0,
     overflow: "hidden",
-    marginBottom: 20,
     marginTop: 20,
-  },    
+  },
 
-  textBox: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    display: "flex",
-    bottom: 0,
-    justifyContent: "center",
-    paddingHorizontal: 20,
-    zIndex: 2,
+  bottomSection: {
+    flex: 1,
+    backgroundColor: "white",
+    paddingHorizontal: 12,
+    paddingTop: 10,
+  },
+
+  orgSection: {
+    flex: 1, // zabere celý dostupný priestor
+    marginTop: -25,
+    backgroundColor: "white",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    zIndex: 5,
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: -2 },
+    minHeight: Dimensions.get("window").height / 2, // zabezpečí aspoň polovicu obrazovky
+  },
+
+
+  orgName: {
+    fontSize: 28,
+    paddingTop: 16,
+    paddingBottom: 16,
+    fontWeight: "900",
+    color: "black",
   },
 
   card: {
-    height: height * 0.132,
+    height: height * 0.10,
     borderRadius: 8,
     overflow: "hidden",
     marginBottom: 12,
-    justifyContent: "flex-end",
+    flexDirection: "row",
   },
 
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
+  rowContent: {
+    flex: 1,
+    flexDirection: "row",
+  },
+
+  leftBox: {
+    width: "25%",
+    justifyContent: "center",
     backgroundColor: "#FF9627",
-    opacity: 0.73,
+    alignItems: "center",
+  },
+
+  rightBox: {
+    width: "75%",
+    backgroundColor: "#f3f3f3",
+    justifyContent: "center",
+    paddingHorizontal: 16,
   },
 
   title: {
-    color: "white",
-    fontSize: 32 * scale,
+    color: "black",
+    fontSize: 14 * scale,
     fontWeight: "800",
   },
 });

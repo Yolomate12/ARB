@@ -1,28 +1,32 @@
 import { supabase } from '@/lib/supabase'
-import { Image } from 'expo-image'
+import FontAwesome from '@expo/vector-icons/FontAwesome'
 import { Link, useLocalSearchParams } from 'expo-router'
 import { useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   Dimensions,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native'
 
 type StreetItem = {
   name_street: string
-  img_street: string | null
+  onlineCount: number
+  offlineCount: number
 }
 
 export default function StreetListScreen() {
   const { city } = useLocalSearchParams<{ city: string }>()
-
   const [streets, setStreets] = useState<StreetItem[]>([])
-  const [cityImage, setCityImage] = useState<string | null>(null)
+  const [filteredStreets, setFilteredStreets] = useState<StreetItem[]>([])
+  const [organisationName, setOrganisationName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     if (!city) return
@@ -32,7 +36,7 @@ export default function StreetListScreen() {
 
       const { data, error } = await supabase
         .from('bin_full_info')
-        .select('name_street, img_street, img_city')
+        .select('name_street, status, nazov_org')
         .eq('name_city', city)
 
       if (error) {
@@ -42,18 +46,32 @@ export default function StreetListScreen() {
       }
 
       if (data && data.length > 0) {
-        // unikátne ulice s obrázkami
-        const uniqueStreets: StreetItem[] = Array.from(
-          new Map(data.map(item => [item.name_street, item])).values()
-        ).map(item => ({
-          name_street: item.name_street,
-          img_street: item.img_street ?? null,
+        // Nastavenie názvu organizácie
+        const firstOrg = data.find(d => d.nazov_org)?.nazov_org ?? null
+        setOrganisationName(firstOrg)
+
+        // Spočítanie online/offline zariadení pre každú ulicu
+        const streetCounts: Record<string, { onlineCount: number; offlineCount: number }> = {}
+
+        data.forEach(item => {
+          if (!streetCounts[item.name_street]) {
+            streetCounts[item.name_street] = { onlineCount: 0, offlineCount: 0 }
+          }
+          if (item.status === 'online') {
+            streetCounts[item.name_street].onlineCount += 1
+          } else {
+            streetCounts[item.name_street].offlineCount += 1
+          }
+        })
+
+        const uniqueStreets: StreetItem[] = Object.entries(streetCounts).map(([name_street, counts]) => ({
+          name_street,
+          onlineCount: counts.onlineCount,
+          offlineCount: counts.offlineCount,
         }))
 
         setStreets(uniqueStreets)
-
-        // obrázok mesta (z prvého záznamu)
-        setCityImage(data[0].img_city ?? null)
+        setFilteredStreets(uniqueStreets)
       }
 
       setLoading(false)
@@ -62,10 +80,22 @@ export default function StreetListScreen() {
     fetchData()
   }, [city])
 
+  // Filter ulíc podľa search inputu
+  useEffect(() => {
+    if (!search) {
+      setFilteredStreets(streets)
+    } else {
+      const filtered = streets.filter(street =>
+        street.name_street.toLowerCase().includes(search.toLowerCase())
+      )
+      setFilteredStreets(filtered)
+    }
+  }, [search, streets])
+
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" />
+        <ActivityIndicator size="large" color="#FF9627" />
       </View>
     )
   }
@@ -79,22 +109,28 @@ export default function StreetListScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      {/* HEADER mesta */}
-      <View style={styles.headerContainer}>
-        <Image
-          source={{ uri: cityImage ?? 'https://via.placeholder.com/600' }}
-          style={styles.image}
+    <ScrollView contentContainerStyle={styles.container}>
+      {/* SEARCH BAR */}
+      <View style={styles.searchContainer}>
+        <TextInput
+          placeholder="Hľadaj ulicu..."
+          placeholderTextColor="#999"
+          style={styles.searchInput}
+          value={search}
+          onChangeText={setSearch}
         />
-        <View style={styles.overlay} />
-        <View style={styles.textBox}>
-          <Text style={styles.headerTitle}>{city}</Text>
-        </View>
       </View>
 
-      {/* STREETS */}
+      {/* HEADER: Organizácia / Mesto */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>
+          {organisationName ? `${organisationName} / ${city}` : city}
+        </Text>
+      </View>
+
+      {/* Zoznam ulíc */}
       <View style={styles.list}>
-        {streets.map(street => (
+        {filteredStreets.map(street => (
           <Link
             key={street.name_street}
             href={{
@@ -104,28 +140,34 @@ export default function StreetListScreen() {
             asChild
           >
             <Pressable style={styles.card}>
-              <Image
-                source={{ uri: street.img_street ?? 'https://via.placeholder.com/600' }}
-                style={styles.image}
-              />
-              <View style={styles.overlay_street} />
-              <View style={styles.textBox}>
-                <Text style={styles.cardTitle}>{street.name_street}</Text>
-                <Text style={styles.textCity}>{city}</Text>
+              {/* Ľavá časť s ikonou */}
+              <View style={styles.leftBox}>
+                <FontAwesome name="map-marker" size={24} color="white" />
+              </View>
+
+              {/* Pravá časť s info */}
+              <View style={styles.rightBox}>
+                <Text style={styles.streetName}>{street.name_street}</Text>
+                <Text style={styles.statusText}>
+                  Online: {street.onlineCount} | Offline: {street.offlineCount}
+                </Text>
               </View>
             </Pressable>
           </Link>
         ))}
       </View>
-    </View>
+    </ScrollView>
   )
 }
 
 const { width, height } = Dimensions.get('window')
+const scale = width / 375
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
+    backgroundColor: 'white',
+    paddingBottom: 20,
   },
   center: {
     flex: 1,
@@ -136,54 +178,65 @@ const styles = StyleSheet.create({
     color: 'red',
     fontSize: 16,
   },
-  headerContainer: {
-    height: 0.18 * height,
-    width: '100%',
-    position: 'relative',
-    marginBottom: 12,
+  searchContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  image: {
-    ...StyleSheet.absoluteFillObject,
-    width: '100%',
-    height: '100%',
+  searchInput: {
+    height: 50,
+    fontSize: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E2E2',
+    paddingHorizontal: 16,
+    backgroundColor: '#F6F6F6',
+    color: '#1E1E1E',
   },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  overlay_street: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#FF9627',
-    opacity: 0.73,
-  },
-  textCity: {
-    color: 'white',
-    fontSize: 20,
-    fontWeight: 'medium'
-  },
-  textBox: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 20,
+  header: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   headerTitle: {
-    color: 'white',
-    fontSize: 32,
+    fontSize: 20,
     fontWeight: 'bold',
+    color: '#1E1E1E',
+    opacity: 0.5,
   },
   list: {
-    padding: 16,
+    paddingHorizontal: 16,
   },
   card: {
-    height: height * 0.15,
-    borderRadius: 0,
+    flexDirection: 'row',
+    height: height * 0.10,
+    borderRadius: 8,
     overflow: 'hidden',
     marginBottom: 12,
-    justifyContent: 'flex-end',
+    backgroundColor: '#f3f3f3',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
   },
-  cardTitle: {
-    color: 'white',
-    fontSize: 32,
-    fontWeight: 'bold',
+  leftBox: {
+    width: '25%',
+    backgroundColor: '#FF9627',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  rightBox: {
+    width: '75%',
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+  },
+  streetName: {
+    fontSize: 16 * scale,
+    fontWeight: '800',
+    color: 'black',
+  },
+  statusText: {
+    fontSize: 14 * scale,
+    color: '#666',
+    marginTop: 2,
   },
 })
