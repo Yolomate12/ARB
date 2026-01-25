@@ -1,119 +1,168 @@
-import { supabase } from '@/lib/supabase'
-import FontAwesome from '@expo/vector-icons/FontAwesome'
-import { Link, useLocalSearchParams } from 'expo-router'
-import { useEffect, useState } from 'react'
+import { supabase } from "@/lib/supabase";
+import { useLanguage } from "@/providers/LanguageProvider";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { Link, useLocalSearchParams } from "expo-router";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
-} from 'react-native'
+} from "react-native";
 
 type StreetItem = {
-  name_street: string
-  onlineCount: number
-  offlineCount: number
-}
+  name_street: string;
+  onlineCount: number;
+  offlineCount: number;
+};
 
 export default function StreetListScreen() {
-  const { city } = useLocalSearchParams<{ city: string }>()
-  const [streets, setStreets] = useState<StreetItem[]>([])
-  const [filteredStreets, setFilteredStreets] = useState<StreetItem[]>([])
-  const [organisationName, setOrganisationName] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [search, setSearch] = useState('')
+  const { t } = useLanguage();
+  const { city } = useLocalSearchParams<{ city: string }>();
 
-  useEffect(() => {
-    if (!city) return
+  const [streets, setStreets] = useState<StreetItem[]>([]);
+  const [filteredStreets, setFilteredStreets] = useState<StreetItem[]>([]);
+  const [organisationName, setOrganisationName] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
-    const fetchData = async () => {
-      setLoading(true)
+  // reload
+  const [refreshing, setRefreshing] = useState(false);
 
-      const { data, error } = await supabase
-        .from('bin_full_info')
-        .select('name_street, status, nazov_org')
-        .eq('name_city', city)
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
-      if (error) {
-        setError(error.message)
-        setLoading(false)
-        return
-      }
+  const fetchData = async (opts?: { silent?: boolean }) => {
+    if (!city) return;
 
-      if (data && data.length > 0) {
-        // Nastavenie názvu organizácie
-        const firstOrg = data.find(d => d.nazov_org)?.nazov_org ?? null
-        setOrganisationName(firstOrg)
+    const silent = opts?.silent ?? false;
 
-        // Spočítanie online/offline zariadení pre každú ulicu
-        const streetCounts: Record<string, { onlineCount: number; offlineCount: number }> = {}
+    if (!silent) setLoading(true);
+    setError(null);
 
-        data.forEach(item => {
-          if (!streetCounts[item.name_street]) {
-            streetCounts[item.name_street] = { onlineCount: 0, offlineCount: 0 }
-          }
-          if (item.status === 'online') {
-            streetCounts[item.name_street].onlineCount += 1
-          } else {
-            streetCounts[item.name_street].offlineCount += 1
-          }
-        })
+    const { data, error } = await supabase
+      .from("bin_full_info")
+      .select("name_street, status, nazov_org")
+      .eq("name_city", city);
 
-        const uniqueStreets: StreetItem[] = Object.entries(streetCounts).map(([name_street, counts]) => ({
+    if (error) {
+      setError(error.message);
+      if (!silent) setLoading(false);
+      return;
+    }
+
+    if (data && data.length > 0) {
+      const firstOrg = data.find((d: any) => d.nazov_org)?.nazov_org ?? null;
+      setOrganisationName(firstOrg);
+
+      const streetCounts: Record<
+        string,
+        { onlineCount: number; offlineCount: number }
+      > = {};
+
+      data.forEach((item: any) => {
+        if (!item.name_street) return;
+
+        if (!streetCounts[item.name_street]) {
+          streetCounts[item.name_street] = { onlineCount: 0, offlineCount: 0 };
+        }
+
+        if (item.status === "online")
+          streetCounts[item.name_street].onlineCount += 1;
+        else streetCounts[item.name_street].offlineCount += 1;
+      });
+
+      const uniqueStreets: StreetItem[] = Object.entries(streetCounts).map(
+        ([name_street, counts]) => ({
           name_street,
           onlineCount: counts.onlineCount,
           offlineCount: counts.offlineCount,
-        }))
+        }),
+      );
 
-        setStreets(uniqueStreets)
-        setFilteredStreets(uniqueStreets)
-      }
-
-      setLoading(false)
-    }
-
-    fetchData()
-  }, [city])
-
-  // Filter ulíc podľa search inputu
-  useEffect(() => {
-    if (!search) {
-      setFilteredStreets(streets)
+      setStreets(uniqueStreets);
+      setFilteredStreets(uniqueStreets);
     } else {
-      const filtered = streets.filter(street =>
-        street.name_street.toLowerCase().includes(search.toLowerCase())
-      )
-      setFilteredStreets(filtered)
+      setStreets([]);
+      setFilteredStreets([]);
+      setOrganisationName(null);
     }
-  }, [search, streets])
+
+    if (!silent) setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [city]);
+
+  // pull-to-refresh handler
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchData({ silent: true });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // filter
+  useEffect(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) {
+      setFilteredStreets(streets);
+      return;
+    }
+    setFilteredStreets(
+      streets.filter((s) => s.name_street.toLowerCase().includes(q)),
+    );
+  }, [search, streets]);
 
   if (loading) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#FF9627" />
       </View>
-    )
+    );
   }
 
   if (error) {
     return (
       <View style={styles.center}>
-        <Text style={styles.error}>Chyba: {error}</Text>
+        <Text style={styles.error}>
+          {t("errorLabel")}: {error}
+        </Text>
       </View>
-    )
+    );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      style={{ flex: 1, width: "100%" }}
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
+      alwaysBounceVertical
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
+      {/* vlastný indikátor - viditeľný vždy pri refresh */}
+      {refreshing && (
+        <View style={styles.refreshRow}>
+          <ActivityIndicator />
+          <Text style={styles.refreshText}>Reloadujem…</Text>
+        </View>
+      )}
+
       {/* SEARCH BAR */}
       <View style={styles.searchContainer}>
         <TextInput
-          placeholder="Hľadaj ulicu..."
+          placeholder={t("searchStreet")}
           placeholderTextColor="#999"
           style={styles.searchInput}
           value={search}
@@ -128,56 +177,77 @@ export default function StreetListScreen() {
         </Text>
       </View>
 
-      {/* Zoznam ulíc */}
+      {/* LIST */}
       <View style={styles.list}>
-        {filteredStreets.map(street => (
+        {filteredStreets.map((street) => (
           <Link
             key={street.name_street}
             href={{
-              pathname: '/(user)/menu/[city]/[street]/devices',
+              pathname: "/(user)/menu/[city]/[street]/devices",
               params: { city, street: street.name_street },
             }}
             asChild
           >
             <Pressable style={styles.card}>
-              {/* Ľavá časť s ikonou */}
               <View style={styles.leftBox}>
                 <FontAwesome name="map-marker" size={24} color="white" />
               </View>
 
-              {/* Pravá časť s info */}
               <View style={styles.rightBox}>
                 <Text style={styles.streetName}>{street.name_street}</Text>
                 <Text style={styles.statusText}>
-                  Online: {street.onlineCount} | Offline: {street.offlineCount}
+                  {t("online")}: {street.onlineCount} | {t("offline")}:{" "}
+                  {street.offlineCount}
                 </Text>
               </View>
             </Pressable>
           </Link>
         ))}
+
+        {!filteredStreets.length ? (
+          <View style={{ paddingVertical: 20 }}>
+            <Text style={{ textAlign: "center", color: "#8E8E93" }}>
+              {t("noStreetsFound")}
+            </Text>
+          </View>
+        ) : null}
       </View>
     </ScrollView>
-  )
+  );
 }
 
-const { width, height } = Dimensions.get('window')
-const scale = width / 375
+const { width, height } = Dimensions.get("window");
+const scale = width / 375;
 
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    backgroundColor: 'white',
+    backgroundColor: "white",
     paddingBottom: 20,
   },
   center: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   error: {
-    color: 'red',
+    color: "red",
     fontSize: 16,
   },
+
+  refreshRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 10,
+    marginBottom: 6,
+    paddingHorizontal: 16,
+  },
+  refreshText: {
+    color: "#8E8E93",
+    fontSize: 13,
+  },
+
   searchContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -187,10 +257,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#E2E2E2',
+    borderColor: "#E2E2E2",
     paddingHorizontal: 16,
-    backgroundColor: '#F6F6F6',
-    color: '#1E1E1E',
+    backgroundColor: "#F6F6F6",
+    color: "#1E1E1E",
   },
   header: {
     paddingHorizontal: 16,
@@ -198,45 +268,45 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1E1E1E',
+    fontWeight: "bold",
+    color: "#1E1E1E",
     opacity: 0.5,
   },
   list: {
     paddingHorizontal: 16,
   },
   card: {
-    flexDirection: 'row',
-    height: height * 0.10,
+    flexDirection: "row",
+    height: height * 0.1,
     borderRadius: 8,
-    overflow: 'hidden',
+    overflow: "hidden",
     marginBottom: 12,
-    backgroundColor: '#f3f3f3',
+    backgroundColor: "#f3f3f3",
     elevation: 4,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOpacity: 0.2,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 3 },
   },
   leftBox: {
-    width: '25%',
-    backgroundColor: '#FF9627',
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: "25%",
+    backgroundColor: "#FF9627",
+    justifyContent: "center",
+    alignItems: "center",
   },
   rightBox: {
-    width: '75%',
+    width: "75%",
     paddingHorizontal: 16,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   streetName: {
     fontSize: 16 * scale,
-    fontWeight: '800',
-    color: 'black',
+    fontWeight: "800",
+    color: "black",
   },
   statusText: {
     fontSize: 14 * scale,
-    color: '#666',
+    color: "#666",
     marginTop: 2,
   },
-})
+});

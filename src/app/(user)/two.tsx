@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
+import { useLanguage } from "@/providers/LanguageProvider";
 import { useRouter } from "expo-router";
 import * as Updates from "expo-updates";
 import { useEffect, useRef, useState } from "react";
@@ -11,6 +12,7 @@ import {
   Modal,
   PanResponder,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -43,9 +45,13 @@ type Bin = {
 export default function TabTwoScreen() {
   const { session } = useAuth();
   const router = useRouter();
+  const { lang, setLang, t } = useLanguage();
 
   const [organizationName, setOrganizationName] = useState("—");
   const [loading, setLoading] = useState(true);
+
+  // pull-to-refresh
+  const [refreshing, setRefreshing] = useState(false);
 
   const [deviceStatus, setDeviceStatus] = useState<DeviceStatus>({
     onlineCount: 0,
@@ -62,6 +68,10 @@ export default function TabTwoScreen() {
   const [joinVisible, setJoinVisible] = useState(false);
   const [joinMounted, setJoinMounted] = useState(false);
 
+  // ---- Language sheet state
+  const [langVisible, setLangVisible] = useState(false);
+  const [langMounted, setLangMounted] = useState(false);
+
   // shared: block clicks while closing any sheet
   const [isClosing, setIsClosing] = useState(false);
 
@@ -70,14 +80,15 @@ export default function TabTwoScreen() {
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
 
-  // držíme poslednú org id (aby sme vedeli zistiť zmenu)
+  // držíme poslednú org id (kvôli “wait” po join)
   const [currentOrgId, setCurrentOrgId] = useState<number | null>(null);
 
   /* =====================
-     ANIMATIONS (2 sheets)
+     ANIMATIONS (3 sheets)
   ===================== */
   const notifY = useRef(new Animated.Value(0)).current;
   const joinY = useRef(new Animated.Value(0)).current;
+  const langY = useRef(new Animated.Value(0)).current;
 
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -92,6 +103,31 @@ export default function TabTwoScreen() {
       translateY.setValue(0);
       setIsClosing(false);
     }, 60);
+  };
+
+  const reloadWholeApp = async () => {
+    if (__DEV__) {
+      DevSettings.reload();
+      return;
+    }
+    try {
+      await Updates.reloadAsync();
+    } catch {
+      router.replace("/(user)/menu");
+    }
+  };
+
+  /* =====================
+     LOGOUT
+  ===================== */
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      setTimeout(() => {
+        reloadWholeApp();
+      }, 100);
+    }
   };
 
   /* =====================
@@ -179,23 +215,60 @@ export default function TabTwoScreen() {
   ).current;
 
   /* =====================
-     HELPERS
+     LANGUAGE SHEET
   ===================== */
-  const reloadWholeApp = async () => {
-    // DEV: expo start / dev build -> najspoľahlivejšie
-    if (__DEV__) {
-      DevSettings.reload();
-      return;
-    }
-
-    // PROD: EAS/Store build
-    try {
-      await Updates.reloadAsync();
-    } catch {
-      router.replace("/(user)/menu");
-    }
+  const openLang = () => {
+    if (isClosing) return;
+    setLangMounted(true);
+    langY.setValue(0);
+    setLangVisible(true);
   };
 
+  const closeLang = () => {
+    if (isClosing) return;
+    setIsClosing(true);
+
+    Animated.timing(langY, {
+      toValue: 700,
+      duration: 170,
+      useNativeDriver: true,
+    }).start(() => {
+      finishClose(setLangVisible, setLangMounted, langY);
+    });
+  };
+
+  const resetLang = () => {
+    Animated.spring(langY, { toValue: 0, useNativeDriver: true }).start();
+  };
+
+  const langPan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderMove: (_evt, g) => {
+        if (g.dy > 0) langY.setValue(g.dy);
+      },
+      onPanResponderRelease: (_evt, g) => {
+        if (g.dy > 120) closeLang();
+        else resetLang();
+      },
+    }),
+  ).current;
+
+  const handleChangeLanguage = async (next: "sk" | "en") => {
+    if (next === lang) return;
+
+    await setLang(next);
+
+    closeLang();
+    setTimeout(() => {
+      reloadWholeApp();
+    }, 200);
+  };
+
+  /* =====================
+     HELPERS
+  ===================== */
   const fetchProfileOrgId = async (): Promise<number | null> => {
     if (!session?.user?.id) return null;
 
@@ -210,7 +283,7 @@ export default function TabTwoScreen() {
   };
 
   /* =====================
-     JOIN COMPANY RPC (WAIT + REAL RELOAD)
+     JOIN COMPANY RPC (WAIT + RELOAD)
   ===================== */
   const handleJoinCompany = async () => {
     const code = joinCode.trim().toUpperCase();
@@ -230,24 +303,18 @@ export default function TabTwoScreen() {
       return;
     }
 
-    // zavri modal (animácia)
     closeJoin();
 
-    // ✅ počkaj, kým sa profiles.id_org fakt zmení (inak reload môže ukázať starú)
     let newOrgId: number | null = null;
-
     for (let i = 0; i < 12; i++) {
       await sleep(250);
       newOrgId = await fetchProfileOrgId();
-
       if (newOrgId && newOrgId !== beforeOrgId) break;
     }
 
-    // ak sa nezmenilo, ukáž chybu a nepretáčaj appku do nekonzistentného stavu
     if (!newOrgId || newOrgId === beforeOrgId) {
-      // otvor modal naspäť a ukáž hlášku
       setJoinError(
-        "Firma sa pripojila, ale profiles.id_org sa nezmenilo (alebo zmena ešte neprešla). Skontroluj join_company, či aktualizuje profiles.id_org.",
+        "Firma sa pripojila, ale profiles.id_org sa nezmenilo. Skontroluj join_company, či aktualizuje profiles.id_org.",
       );
       setJoinMounted(true);
       joinY.setValue(0);
@@ -255,11 +322,8 @@ export default function TabTwoScreen() {
       return;
     }
 
-    // uložíme novú orgId (len pre istotu)
     setCurrentOrgId(newOrgId);
 
-    // ✅ reálny reload celej appky
-    // malá pauza nech dobehne animácia zatvorenia
     setTimeout(() => {
       reloadWholeApp();
     }, 200);
@@ -268,10 +332,12 @@ export default function TabTwoScreen() {
   /* =====================
      FETCH DATA
   ===================== */
-  const refetch = async () => {
+  const refetch = async (opts?: { silent?: boolean }) => {
     if (!session?.user?.id) return;
 
-    setLoading(true);
+    const silent = opts?.silent ?? false;
+
+    if (!silent) setLoading(true);
     try {
       const orgId = await fetchProfileOrgId();
       setCurrentOrgId(orgId);
@@ -314,7 +380,7 @@ export default function TabTwoScreen() {
 
       setBinsOverLimit(bins.filter((b) => Number(b.naplnenie ?? 0) >= 80));
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -323,23 +389,54 @@ export default function TabTwoScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
 
+  // pull-to-refresh
+  const onRefresh = async () => {
+    // ak je otvorený nejaký sheet, nerefreshuj (aby sa nebilo s gestami)
+    if (notificationsMounted || joinMounted || langMounted) return;
+
+    setRefreshing(true);
+    try {
+      await refetch({ silent: true });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   /* =====================
      UI
   ===================== */
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={{ flex: 1, width: "100%" }}
+      contentContainerStyle={styles.container}
+      alwaysBounceVertical
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+      keyboardShouldPersistTaps="handled"
+    >
       {/* HEADER */}
       <View style={styles.header}>
         <Image
           source={require("@assets/images/logo.png")}
           style={styles.logo}
+          resizeMode="contain"
         />
         <TouchableOpacity onPress={() => router.replace("/(user)/menu")}>
           <Text style={styles.close}>✕</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.section}>Možnosti</Text>
+      {/* vlastný indikátor - viditeľný vždy pri refresh */}
+      {refreshing && (
+        <View style={styles.refreshRow}>
+          <ActivityIndicator />
+          <Text style={styles.refreshText}>Reloadujem…</Text>
+        </View>
+      )}
+
+      <Text style={styles.section}>{t("options")}</Text>
 
       <Text style={styles.organization}>
         {loading ? "Načítavam…" : organizationName}
@@ -348,9 +445,9 @@ export default function TabTwoScreen() {
       {/* DEVICES */}
       <TouchableOpacity style={styles.listItem}>
         <View>
-          <Text style={styles.listTitle}>Zariadenia</Text>
+          <Text style={styles.listTitle}>{t("devices")}</Text>
           <Text style={styles.listSubtitle}>
-            Online: {deviceStatus.onlineCount} · Offline:{" "}
+            {t("online")}: {deviceStatus.onlineCount} · {t("offline")}:{" "}
             {deviceStatus.offlineCount}
           </Text>
         </View>
@@ -364,8 +461,8 @@ export default function TabTwoScreen() {
         disabled={isClosing}
       >
         <View>
-          <Text style={styles.listTitle}>Notifikácie</Text>
-          <Text style={styles.listSubtitle}>Koše nad 80 %</Text>
+          <Text style={styles.listTitle}>{t("notifications")}</Text>
+          <Text style={styles.listSubtitle}>{t("binsOver80")}</Text>
         </View>
         <Text style={styles.chevron}>›</Text>
       </TouchableOpacity>
@@ -377,12 +474,40 @@ export default function TabTwoScreen() {
         disabled={isClosing}
       >
         <View>
-          <Text style={styles.listTitle}>Pripojiť firmu</Text>
+          <Text style={styles.listTitle}>{t("joinCompany")}</Text>
+          <Text style={styles.listSubtitle}>{t("joinSubtitle")}</Text>
+        </View>
+        <Text style={styles.chevron}>›</Text>
+      </TouchableOpacity>
+
+      {/* LANGUAGE */}
+      <TouchableOpacity
+        style={styles.listItem}
+        onPress={openLang}
+        disabled={isClosing}
+      >
+        <View>
+          <Text style={styles.listTitle}>{t("language")}</Text>
           <Text style={styles.listSubtitle}>
-            Zadať kód / pridať organizáciu
+            {lang === "sk" ? t("slovak") : t("english")}
           </Text>
         </View>
         <Text style={styles.chevron}>›</Text>
+      </TouchableOpacity>
+
+      {/* LOGOUT */}
+      <TouchableOpacity
+        style={[styles.listItem, styles.logoutItem]}
+        onPress={handleLogout}
+        disabled={isClosing}
+      >
+        <View>
+          <Text style={[styles.listTitle, styles.logoutTitle]}>
+            Odhlásiť sa
+          </Text>
+          <Text style={styles.listSubtitle}>Odhlásiť sa z účtu</Text>
+        </View>
+        <Text style={[styles.chevron, styles.logoutChevron]}>›</Text>
       </TouchableOpacity>
 
       {/* =====================
@@ -410,7 +535,7 @@ export default function TabTwoScreen() {
                 <View style={styles.modalHandle} />
               </View>
 
-              <Text style={styles.modalTitle}>Koše nad 80 %</Text>
+              <Text style={styles.modalTitle}>{t("binsOver80")}</Text>
 
               <ScrollView
                 style={{ flex: 1 }}
@@ -418,14 +543,12 @@ export default function TabTwoScreen() {
                 showsVerticalScrollIndicator={false}
               >
                 {binsOverLimit.length === 0 ? (
-                  <Text style={styles.emptyText}>
-                    Žiadny kôš nie je naplnený nad 80 %
-                  </Text>
+                  <Text style={styles.emptyText}>{t("noneOver80")}</Text>
                 ) : (
                   binsOverLimit.map((bin) => (
                     <View key={bin.bin_id} style={styles.binItem}>
                       <Text style={styles.binName}>
-                        {bin.name_street ?? "Neznáma ulica"}
+                        {bin.name_street ?? "—"}
                       </Text>
                       <Text style={styles.binLocation}>
                         {bin.name_city ?? ""}
@@ -467,11 +590,11 @@ export default function TabTwoScreen() {
                 <View style={styles.modalHandle} />
               </View>
 
-              <Text style={styles.modalTitle}>Pripojenie ku spoločnosti</Text>
+              <Text style={styles.modalTitle}>{t("joinTitle")}</Text>
 
               <TextInput
                 style={styles.joinInput}
-                placeholder="Zadaj kód spoločnosti"
+                placeholder={t("joinPlaceholder")}
                 value={joinCode}
                 onChangeText={setJoinCode}
                 autoCapitalize="characters"
@@ -490,18 +613,65 @@ export default function TabTwoScreen() {
                 {joinLoading ? (
                   <ActivityIndicator color="white" />
                 ) : (
-                  <Text style={styles.joinButtonText}>Pripojiť sa</Text>
+                  <Text style={styles.joinButtonText}>{t("joinButton")}</Text>
                 )}
               </TouchableOpacity>
 
-              <Text style={styles.joinHint}>
-                Potiahni dole za čiaru pre zavretie.
-              </Text>
+              <Text style={styles.joinHint}>{t("pullDownToClose")}</Text>
             </Animated.View>
           </View>
         </Modal>
       )}
-    </View>
+
+      {/* =====================
+         LANGUAGE SHEET
+      ===================== */}
+      {langMounted && (
+        <Modal
+          visible={langVisible}
+          animationType="none"
+          transparent
+          onRequestClose={closeLang}
+        >
+          <View
+            style={styles.modalWrapper}
+            pointerEvents={isClosing ? "none" : "auto"}
+          >
+            <Pressable style={{ flex: 1 }} onPress={closeLang} />
+            <Animated.View
+              style={[
+                styles.bottomModalBox,
+                { transform: [{ translateY: langY }] },
+              ]}
+            >
+              <View style={styles.handleTouchArea} {...langPan.panHandlers}>
+                <View style={styles.modalHandle} />
+              </View>
+
+              <Text style={styles.modalTitle}>{t("languageTitle")}</Text>
+
+              <TouchableOpacity
+                style={[styles.langRow, lang === "sk" && styles.langRowActive]}
+                onPress={() => handleChangeLanguage("sk")}
+              >
+                <Text style={styles.langText}>{t("slovak")}</Text>
+                <Text style={styles.langCheck}>{lang === "sk" ? "✓" : ""}</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.langRow, lang === "en" && styles.langRowActive]}
+                onPress={() => handleChangeLanguage("en")}
+              >
+                <Text style={styles.langText}>{t("english")}</Text>
+                <Text style={styles.langCheck}>{lang === "en" ? "✓" : ""}</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.joinHint}>{t("pullDownToClose")}</Text>
+            </Animated.View>
+          </View>
+        </Modal>
+      )}
+    </ScrollView>
   );
 }
 
@@ -510,20 +680,34 @@ export default function TabTwoScreen() {
 ===================== */
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
     paddingTop: 50,
     alignItems: "center",
     backgroundColor: "white",
+    paddingBottom: 24,
   },
   header: {
     width: "100%",
-    paddingTop: 30,
-    paddingHorizontal: 20,
+    paddingTop: 14,
+    paddingHorizontal: 30,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
   close: { fontSize: 28, fontWeight: "bold" },
+
+  refreshRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 10,
+    marginBottom: 6,
+  },
+  refreshText: {
+    color: "#8E8E93",
+    fontSize: 13,
+  },
+
   section: { marginTop: 20, fontSize: 14, fontWeight: "bold" },
   organization: { marginTop: 12, fontSize: 18, fontWeight: "600" },
 
@@ -541,17 +725,20 @@ const styles = StyleSheet.create({
   listTitle: { fontSize: 16, fontWeight: "500" },
   listSubtitle: { fontSize: 14, color: "#8E8E93" },
   chevron: { fontSize: 24, color: "#C7C7CC" },
-  logo: { width: 40, height: 40 },
+
+  logo: {
+    width: 50,
+    height: 50,
+  },
 
   modalWrapper: { flex: 1, justifyContent: "flex-end" },
 
   bottomModalBox: {
-    height: "50%",
+    height: "60%",
     backgroundColor: "white",
     padding: 20,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.15,
@@ -624,5 +811,43 @@ const styles = StyleSheet.create({
     textAlign: "center",
     color: "#8E8E93",
     fontSize: 12,
+  },
+
+  // language rows
+  langRow: {
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "#E5E5E5",
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 10,
+  },
+  langRowActive: {
+    borderColor: "#FF9627",
+  },
+  langText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  langCheck: {
+    fontSize: 18,
+    fontWeight: "800",
+  },
+
+  // logout
+  logoutItem: {
+    borderBottomColor: "transparent",
+    marginTop: 18,
+  },
+  logoutTitle: {
+    color: "#FF3B30",
+    fontWeight: "700",
+  },
+  logoutChevron: {
+    color: "#FF3B30",
   },
 });

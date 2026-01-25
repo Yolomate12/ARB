@@ -1,15 +1,17 @@
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
+import { useLanguage } from "@/providers/LanguageProvider";
 import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   TextInput,
-  View
+  View,
 } from "react-native";
 import { AnimatedCircularProgress } from "react-native-circular-progress";
 
@@ -25,11 +27,15 @@ type DeviceItem = {
   tanks: Tank[];
 };
 
-const TANK_TYPES: Record<number, string> = {
-  1: "Plast",
-  2: "Papier",
-  3: "Sklo",
-  4: "Komunál",
+// NOTE: typy ostali rovnaké, len labely idú cez t()
+const TANK_TYPE_KEYS: Record<
+  number,
+  "tankPlastic" | "tankPaper" | "tankGlass" | "tankMixed"
+> = {
+  1: "tankPlastic",
+  2: "tankPaper",
+  3: "tankGlass",
+  4: "tankMixed",
 };
 
 const TANK_COLORS: Record<number, string> = {
@@ -40,73 +46,100 @@ const TANK_COLORS: Record<number, string> = {
 };
 
 export default function StreetDevicesScreen() {
-  const { city, street } = useLocalSearchParams<{ city: string; street: string }>();
+  const { t } = useLanguage();
+  const { city, street } = useLocalSearchParams<{
+    city: string;
+    street: string;
+  }>();
   const { profile } = useAuth();
 
   const [devices, setDevices] = useState<DeviceItem[]>([]);
   const [filteredDevices, setFilteredDevices] = useState<DeviceItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // reload
+  const [refreshing, setRefreshing] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
+  const fetchDevices = async (opts?: { silent?: boolean }) => {
     if (!city || !street || !profile?.id_org) return;
 
-    const fetchDevices = async () => {
-      try {
-        setLoading(true);
+    const silent = opts?.silent ?? false;
 
-        const { data: deviceData, error: deviceError } = await supabase
-          .from("bin_full_info")
-          .select("device_id, device_name, status")
-          .eq("name_city", city)
-          .eq("name_street", street)
-          .eq("id_org", profile.id_org);
+    try {
+      if (!silent) setLoading(true);
+      setError(null);
 
-        if (deviceError) throw deviceError;
+      const { data: deviceData, error: deviceError } = await supabase
+        .from("bin_full_info")
+        .select("device_id, device_name, status")
+        .eq("name_city", city)
+        .eq("name_street", street)
+        .eq("id_org", profile.id_org);
 
-        const devicesWithTanks: DeviceItem[] = await Promise.all(
-          (deviceData || [])
-            .filter((d) => d.device_id)
-            .map(async (device) => {
-              const { data: tanksData } = await supabase
-                .from("tank_status")
-                .select("tank_id, level")
-                .eq("device_id", device.device_id);
+      if (deviceError) throw deviceError;
 
-              return {
-                device_id: device.device_id,
-                device_name: device.device_name,
-                status: device.status,
-                tanks: tanksData || [],
-              };
-            })
-        );
+      const devicesWithTanks: DeviceItem[] = await Promise.all(
+        (deviceData || [])
+          .filter((d) => d.device_id)
+          .map(async (device) => {
+            const { data: tanksData, error: tanksError } = await supabase
+              .from("tank_status")
+              .select("tank_id, level")
+              .eq("device_id", device.device_id);
 
-        setDevices(devicesWithTanks);
-        setFilteredDevices(devicesWithTanks);
-      } catch (err: any) {
-        console.error("Chyba pri načítaní zariadení:", err);
-        setError(err.message || "Chyba pri načítaní dát");
-      } finally {
-        setLoading(false);
-      }
-    };
+            if (tanksError) {
+              // nech to nespadne celé, ale logni
+              console.warn("Tank status error:", tanksError);
+            }
 
+            return {
+              device_id: device.device_id,
+              device_name: device.device_name,
+              status: device.status,
+              tanks: tanksData || [],
+            };
+          }),
+      );
+
+      setDevices(devicesWithTanks);
+      setFilteredDevices(devicesWithTanks);
+    } catch (err: any) {
+      console.error("Error fetching devices:", err);
+      setError(err?.message || t("errorLoadingDevices"));
+    } finally {
+      if (!silent) setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchDevices();
-  }, [city, street, profile]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [city, street, profile?.id_org]);
 
   // Filter podľa search inputu
   useEffect(() => {
-    if (!search) {
+    const q = search.trim().toLowerCase();
+    if (!q) {
       setFilteredDevices(devices);
-    } else {
-      const filtered = devices.filter((d) =>
-        d.device_name.toLowerCase().includes(search.toLowerCase())
-      );
-      setFilteredDevices(filtered);
+      return;
     }
+    setFilteredDevices(
+      devices.filter((d) => (d.device_name ?? "").toLowerCase().includes(q)),
+    );
   }, [search, devices]);
+
+  // pull-to-refresh
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchDevices({ silent: true });
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -119,7 +152,9 @@ export default function StreetDevicesScreen() {
   if (error) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.error}>{error}</Text>
+        <Text style={styles.error}>
+          {t("errorLabel")}: {error}
+        </Text>
       </View>
     );
   }
@@ -128,7 +163,7 @@ export default function StreetDevicesScreen() {
     <View style={styles.container}>
       {/* SEARCH BAR */}
       <TextInput
-        placeholder="Hľadaj zariadenie..."
+        placeholder={t("searchDevice")}
         placeholderTextColor="#999"
         style={styles.searchInput}
         value={search}
@@ -144,10 +179,31 @@ export default function StreetDevicesScreen() {
         data={filteredDevices}
         keyExtractor={(item) => item.device_id}
         contentContainerStyle={{ paddingBottom: 20 }}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        ListHeaderComponent={
+          refreshing ? (
+            <View style={styles.refreshRow}>
+              <ActivityIndicator />
+              <Text style={styles.refreshText}>Reloadujem…</Text>
+            </View>
+          ) : null
+        }
+        ListEmptyComponent={
+          <View style={{ paddingVertical: 20 }}>
+            <Text style={{ textAlign: "center", color: "#8E8E93" }}>
+              {t("noDevicesFound")}
+            </Text>
+          </View>
+        }
         renderItem={({ item }) => (
           <Pressable style={styles.card}>
             <Text style={styles.deviceName}>{item.device_name}</Text>
-            <Text style={styles.statusText}>Status: {item.status}</Text>
+            <Text style={styles.statusText}>
+              {t("statusLabel")}: {item.status}
+            </Text>
 
             <View style={styles.progressContainer}>
               {item.tanks.map((tank) => (
@@ -161,7 +217,10 @@ export default function StreetDevicesScreen() {
                   >
                     {() => <Text>{tank.level ?? 0}%</Text>}
                   </AnimatedCircularProgress>
-                  <Text style={styles.tankLabel}>{TANK_TYPES[tank.tank_id]}</Text>
+
+                  <Text style={styles.tankLabel}>
+                    {t(TANK_TYPE_KEYS[tank.tank_id] ?? "tankUnknown")}
+                  </Text>
                 </View>
               ))}
             </View>
@@ -176,6 +235,19 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: "white" },
   centered: { flex: 1, justifyContent: "center", alignItems: "center" },
   error: { color: "red", fontSize: 16, textAlign: "center" },
+
+  refreshRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  refreshText: {
+    color: "#8E8E93",
+    fontSize: 13,
+  },
+
   searchInput: {
     height: 50,
     fontSize: 16,

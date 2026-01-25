@@ -1,5 +1,6 @@
 import { useColorScheme } from "@/components/useColorScheme";
 import AuthProvider from "@/providers/AuthProvider";
+import { LanguageProvider } from "@/providers/LanguageProvider";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import {
   DarkTheme,
@@ -7,7 +8,7 @@ import {
   ThemeProvider,
 } from "@react-navigation/native";
 import { useFonts } from "expo-font";
-import { Stack, usePathname, useRouter } from "expo-router";
+import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import "react-native-reanimated";
@@ -41,30 +42,19 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
-  const router = useRouter();
-  const pathname = usePathname(); // ← tu získame aktuálnu cestu
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      console.log("Refreshing current screen...");
-      if (pathname) {
-        router.replace(pathname); // refresh aktuálneho screen-u
-      }
-    }, 60 * 1000);
-
-    return () => clearInterval(interval);
-  }, [pathname, router]);
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <AuthProvider>
-        <Stack>
-          <Stack.Screen name="(user)" options={{ headerShown: false }} />
-          <Stack.Screen name="(admin)" options={{ headerShown: false }} />
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-          <Stack.Screen name="modal" options={{ presentation: "modal" }} />
-        </Stack>
-      </AuthProvider>
+      <LanguageProvider>
+        <AuthProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(user)" />
+            <Stack.Screen name="(admin)" />
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+          </Stack>
+        </AuthProvider>
+      </LanguageProvider>
     </ThemeProvider>
   );
 }

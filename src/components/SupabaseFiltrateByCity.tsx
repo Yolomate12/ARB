@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
+import { useLanguage } from "@/providers/LanguageProvider";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { Link } from "expo-router";
 import { useEffect, useRef, useState } from "react";
@@ -7,6 +8,7 @@ import {
   ActivityIndicator,
   Dimensions,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -27,90 +29,112 @@ type CityItem = {
 
 export default function CityListScreen() {
   const { profile } = useAuth();
+  const { t } = useLanguage();
+
   const [cities, setCities] = useState<CityItem[]>([]);
   const [filteredCities, setFilteredCities] = useState<CityItem[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [organisationName, setOrganisationName] = useState<string | null>(null);
 
   const mapRef = useRef<MapView>(null);
 
-  // Načítanie miest z DB
-  useEffect(() => {
+  const fetchCities = async (opts?: { silent?: boolean }) => {
     if (!profile?.id_org) return;
 
-    const fetchCities = async () => {
-      try {
-        setLoading(true);
+    const silent = opts?.silent ?? false;
 
-        const { data, error } = await supabase
-          .from("bin_full_info")
-          .select("name_city, name_street, nazov_org, latitude, longitude, status")
-          .eq("id_org", profile.id_org);
+    try {
+      if (!silent) setLoading(true);
+      setError(null);
 
-        if (error) throw error;
+      const { data, error } = await supabase
+        .from("bin_full_info")
+        .select(
+          "name_city, name_street, nazov_org, latitude, longitude, status",
+        )
+        .eq("id_org", profile.id_org);
 
-        if (data && data.length > 0) {
-          // Názov organizácie
-          const firstOrg = data.find(
-            (item) => item.nazov_org && item.nazov_org.trim() !== ""
-          )?.nazov_org;
+      if (error) throw error;
 
-          setOrganisationName(firstOrg ?? profile.organisation);
+      if (data && data.length > 0) {
+        const firstOrg = data.find(
+          (item: any) => item.nazov_org && String(item.nazov_org).trim() !== "",
+        )?.nazov_org;
 
-          // Agregácia miest a online/offline kontajnerov
-          const cityMap = new Map<string, CityItem>();
+        setOrganisationName(firstOrg ?? profile.organisation ?? null);
 
-          data.forEach((item) => {
-            const existing = cityMap.get(item.name_city);
-            const isOnline = item.status === "online";
+        const cityMap = new Map<string, CityItem>();
 
-            if (!existing) {
-              cityMap.set(item.name_city, {
-                name_city: item.name_city,
-                streets: item.name_street ? [item.name_street] : [],
-                latitude: item.latitude ?? 48.1486,
-                longitude: item.longitude ?? 17.1077,
-                organisation: item.nazov_org ?? null,
-                onlineCount: isOnline ? 1 : 0,
-                offlineCount: isOnline ? 0 : 1,
-              });
-            } else {
-              if (item.name_street && !existing.streets.includes(item.name_street)) {
-                existing.streets.push(item.name_street);
-              }
-              if (isOnline) existing.onlineCount += 1;
-              else existing.offlineCount += 1;
+        data.forEach((item: any) => {
+          const existing = cityMap.get(item.name_city);
+          const isOnline = item.status === "online";
+
+          if (!existing) {
+            cityMap.set(item.name_city, {
+              name_city: item.name_city,
+              streets: item.name_street ? [item.name_street] : [],
+              latitude: item.latitude ?? 48.1486,
+              longitude: item.longitude ?? 17.1077,
+              organisation: item.nazov_org ?? null,
+              onlineCount: isOnline ? 1 : 0,
+              offlineCount: isOnline ? 0 : 1,
+            });
+          } else {
+            if (
+              item.name_street &&
+              !existing.streets.includes(item.name_street)
+            ) {
+              existing.streets.push(item.name_street);
             }
-          });
+            if (isOnline) existing.onlineCount += 1;
+            else existing.offlineCount += 1;
+          }
+        });
 
-          const uniqueCities = Array.from(cityMap.values());
-          setCities(uniqueCities);
-          setFilteredCities(uniqueCities);
-        } else {
-          setOrganisationName(profile.organisation);
-        }
-
-        setLoading(false);
-      } catch (err: any) {
-        console.error("Error fetching cities:", err);
-        setError(err.message || "Chyba pri načítaní miest");
-        setLoading(false);
+        const uniqueCities = Array.from(cityMap.values());
+        setCities(uniqueCities);
+        // filter sa nastaví v useEffect podľa search, ale pre istotu:
+        setFilteredCities(uniqueCities);
+      } else {
+        setOrganisationName(profile.organisation ?? null);
+        setCities([]);
+        setFilteredCities([]);
       }
-    };
+    } catch (err: any) {
+      console.error("Error fetching cities:", err);
+      setError(err?.message || t("errorLoadingCities"));
+    } finally {
+      if (!opts?.silent) setLoading(false);
+    }
+  };
 
+  // prvé načítanie
+  useEffect(() => {
+    if (!profile?.id_org) return;
     fetchCities();
-  }, [profile]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id_org]);
+
+  // pull-to-refresh handler
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await fetchCities({ silent: true });
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   // Filter miest podľa vyhľadávania
   useEffect(() => {
+    const q = search.toLowerCase();
     const filtered = cities.filter(
       (city) =>
-        city.name_city.toLowerCase().includes(search.toLowerCase()) ||
-        city.streets.some((street) =>
-          street.toLowerCase().includes(search.toLowerCase())
-        )
+        city.name_city.toLowerCase().includes(q) ||
+        city.streets.some((street) => street.toLowerCase().includes(q)),
     );
     setFilteredCities(filtered);
   }, [search, cities]);
@@ -130,7 +154,7 @@ export default function CityListScreen() {
             latitudeDelta: 0.05,
             longitudeDelta: 0.05,
           },
-          1000
+          1000,
         );
       } else {
         mapRef.current.fitToCoordinates(coords, {
@@ -145,17 +169,25 @@ export default function CityListScreen() {
     return (
       <View style={[styles.container, styles.center]}>
         <ActivityIndicator size="large" />
-        <Text style={{ marginTop: 10, color: "#FF9627" }}>Načítavam profil...</Text>
+        <Text style={{ marginTop: 10, color: "#FF9627" }}>
+          {t("loadingProfile")}
+        </Text>
       </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
       {/* SEARCHBAR */}
       <View style={styles.section}>
         <TextInput
-          placeholder="Hľadaj mesto alebo ulicu..."
+          placeholder={t("searchCityStreet")}
           value={search}
           onChangeText={setSearch}
           style={styles.searchBar}
@@ -178,9 +210,12 @@ export default function CityListScreen() {
           {filteredCities.map((city) => (
             <Marker
               key={city.name_city}
-              coordinate={{ latitude: city.latitude, longitude: city.longitude }}
+              coordinate={{
+                latitude: city.latitude,
+                longitude: city.longitude,
+              }}
               title={city.name_city}
-              description={city.organisation ?? "Neznáma organizácia"}
+              description={city.organisation ?? t("unknownOrganisation")}
             />
           ))}
         </MapView>
@@ -188,11 +223,10 @@ export default function CityListScreen() {
 
       {/* ORGANIZÁCIA */}
       <View style={[styles.bottomSection, styles.orgSection]}>
-        <Text style={styles.orgName}>
-          {organisationName ?? "Nie je nastavená"}
-        </Text>
+        <Text style={styles.orgName}>{organisationName ?? t("notSet")}</Text>
 
-        <Text style={{fontSize: 14, fontWeight: 'bold', paddingTop: 10, paddingBottom: 10,}}>Vaše pobočky</Text>
+        <Text style={styles.branchesTitle}>{t("yourBranches")}</Text>
+
         {/* ZOZNAM MIEST */}
         <View style={{ marginTop: 12 }}>
           {filteredCities.map((city) => (
@@ -204,19 +238,17 @@ export default function CityListScreen() {
               }}
               asChild
             >
-              
               <Pressable style={styles.card}>
                 <View style={styles.rowContent}>
-                  {/* 25 % box */}
                   <View style={styles.leftBox}>
                     <FontAwesome name="map-marker" size={24} color="white" />
                   </View>
 
-                  {/* 75 % box */}
                   <View style={styles.rightBox}>
                     <Text style={styles.title}>{city.name_city}</Text>
                     <Text>
-                      Online: {city.onlineCount}, Offline: {city.offlineCount}
+                      {t("online")}: {city.onlineCount}, {t("offline")}:{" "}
+                      {city.offlineCount}
                     </Text>
                   </View>
                 </View>
@@ -224,9 +256,18 @@ export default function CityListScreen() {
             </Link>
           ))}
         </View>
+
+        {/* keď nie sú výsledky */}
+        {!loading && !error && filteredCities.length === 0 ? (
+          <View style={{ paddingVertical: 20 }}>
+            <Text style={{ textAlign: "center", color: "#8E8E93" }}>
+              {t("noBranchesFound")}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
-      {/* LOADING */}
+      {/* LOADING (len pri prvom načítaní, nie pri pull-to-refresh) */}
       {loading && (
         <View style={styles.center}>
           <ActivityIndicator size="large" />
@@ -236,7 +277,9 @@ export default function CityListScreen() {
       {/* ERROR */}
       {error && (
         <View style={styles.center}>
-          <Text style={{ color: "red" }}>Chyba: {error}</Text>
+          <Text style={{ color: "red" }}>
+            {t("errorLabel")}: {error}
+          </Text>
         </View>
       )}
     </ScrollView>
@@ -259,7 +302,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: 16,
     marginTop: 10,
-    color: "white",
+    color: "black",
     fontSize: 16,
   },
 
@@ -279,7 +322,7 @@ const styles = StyleSheet.create({
   },
 
   orgSection: {
-    flex: 1, // zabere celý dostupný priestor
+    flex: 1,
     marginTop: -25,
     backgroundColor: "white",
     paddingVertical: 10,
@@ -292,9 +335,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.15,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: -2 },
-    minHeight: Dimensions.get("window").height / 2, // zabezpečí aspoň polovicu obrazovky
+    minHeight: Dimensions.get("window").height / 2,
   },
-
 
   orgName: {
     fontSize: 28,
@@ -304,8 +346,16 @@ const styles = StyleSheet.create({
     color: "black",
   },
 
+  branchesTitle: {
+    fontSize: 14,
+    fontWeight: "bold",
+    paddingTop: 10,
+    paddingBottom: 10,
+    color: "black",
+  },
+
   card: {
-    height: height * 0.10,
+    height: height * 0.1,
     borderRadius: 8,
     overflow: "hidden",
     marginBottom: 12,
