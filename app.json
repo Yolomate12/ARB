@@ -1,52 +1,54 @@
 {
   "expo": {
-    "name": "ARP",
+    "name": "ARB",
     "slug": "ARP",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "arp",
+    "scheme": "arb",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "icon": "./assets/images/adaptiveLogo.png",
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/adaptiveLogo.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+    "androidStatusBar": {
+      "backgroundColor": "#ffffff",
+      "barStyle": "dark-content",
+      "translucent": false
+    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.sebik.ARP",
+      "bundleIdentifier": "com.sebik.arp",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
+      "package": "com.sebik.arp",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/adaptiveLogo.png",
         "backgroundColor": "#ffffff"
       },
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyARSqMiaHf1-g4vGhvXm4vJ_Y7GFVRVlTo"
+        }
+      },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "package": "com.sebik.ARP"
+      "predictiveBackGestureEnabled": false
     },
-    "web": {
-      "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
-    },
-    "plugins": [
-      "expo-router",
-      "expo-secure-store"
-    ],
+    "plugins": ["expo-router", "expo-secure-store"],
     "experiments": {
       "typedRoutes": true,
       "tsconfigPaths": true
     },
     "extra": {
-      "router": {},
       "eas": {
         "projectId": "1ef225cf-c041-44cb-a832-7d41df3a7d23"
       }
-    }
+    },
+    "owner": "sebik"
   }
 }

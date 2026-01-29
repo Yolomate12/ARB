@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Animated,
   DevSettings,
+  Dimensions,
   Image,
   Modal,
   PanResponder,
@@ -40,6 +41,14 @@ type Bin = {
 };
 
 /* =====================
+   RESPONSIVE HELPERS (len width/height)
+===================== */
+const { width: W, height: H } = Dimensions.get("window");
+const vw = (p: number) => (W * p) / 100;
+const vh = (p: number) => (H * p) / 100;
+const fs = (b: number) => Math.max(12, (b * W) / 375);
+
+/* =====================
    COMPONENT
 ===================== */
 export default function TabTwoScreen() {
@@ -50,7 +59,6 @@ export default function TabTwoScreen() {
   const [organizationName, setOrganizationName] = useState("—");
   const [loading, setLoading] = useState(true);
 
-  // pull-to-refresh
   const [refreshing, setRefreshing] = useState(false);
 
   const [deviceStatus, setDeviceStatus] = useState<DeviceStatus>({
@@ -60,27 +68,21 @@ export default function TabTwoScreen() {
 
   const [binsOverLimit, setBinsOverLimit] = useState<Bin[]>([]);
 
-  // ---- Notifications sheet state
   const [notificationsVisible, setNotificationsVisible] = useState(false);
   const [notificationsMounted, setNotificationsMounted] = useState(false);
 
-  // ---- Join company sheet state
   const [joinVisible, setJoinVisible] = useState(false);
   const [joinMounted, setJoinMounted] = useState(false);
 
-  // ---- Language sheet state
   const [langVisible, setLangVisible] = useState(false);
   const [langMounted, setLangMounted] = useState(false);
 
-  // shared: block clicks while closing any sheet
   const [isClosing, setIsClosing] = useState(false);
 
-  // Join company form
   const [joinCode, setJoinCode] = useState("");
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
 
-  // držíme poslednú org id (kvôli “wait” po join)
   const [currentOrgId, setCurrentOrgId] = useState<number | null>(null);
 
   /* =====================
@@ -145,7 +147,7 @@ export default function TabTwoScreen() {
     setIsClosing(true);
 
     Animated.timing(notifY, {
-      toValue: 700,
+      toValue: vh(90),
       duration: 170,
       useNativeDriver: true,
     }).start(() => {
@@ -165,7 +167,7 @@ export default function TabTwoScreen() {
         if (g.dy > 0) notifY.setValue(g.dy);
       },
       onPanResponderRelease: (_evt, g) => {
-        if (g.dy > 120) closeNotifications();
+        if (g.dy > vh(14)) closeNotifications();
         else resetNotifications();
       },
     }),
@@ -188,7 +190,7 @@ export default function TabTwoScreen() {
     setIsClosing(true);
 
     Animated.timing(joinY, {
-      toValue: 700,
+      toValue: vh(90),
       duration: 170,
       useNativeDriver: true,
     }).start(() => {
@@ -208,7 +210,7 @@ export default function TabTwoScreen() {
         if (g.dy > 0) joinY.setValue(g.dy);
       },
       onPanResponderRelease: (_evt, g) => {
-        if (g.dy > 120) closeJoin();
+        if (g.dy > vh(14)) closeJoin();
         else resetJoin();
       },
     }),
@@ -229,7 +231,7 @@ export default function TabTwoScreen() {
     setIsClosing(true);
 
     Animated.timing(langY, {
-      toValue: 700,
+      toValue: vh(90),
       duration: 170,
       useNativeDriver: true,
     }).start(() => {
@@ -249,7 +251,7 @@ export default function TabTwoScreen() {
         if (g.dy > 0) langY.setValue(g.dy);
       },
       onPanResponderRelease: (_evt, g) => {
-        if (g.dy > 120) closeLang();
+        if (g.dy > vh(14)) closeLang();
         else resetLang();
       },
     }),
@@ -313,9 +315,7 @@ export default function TabTwoScreen() {
     }
 
     if (!newOrgId || newOrgId === beforeOrgId) {
-      setJoinError(
-        "Firma sa pripojila, ale profiles.id_org sa nezmenilo. Skontroluj join_company, či aktualizuje profiles.id_org.",
-      );
+      setJoinError("K tejto Organizácii si už pripojený");
       setJoinMounted(true);
       joinY.setValue(0);
       setJoinVisible(true);
@@ -389,9 +389,7 @@ export default function TabTwoScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
 
-  // pull-to-refresh
   const onRefresh = async () => {
-    // ak je otvorený nejaký sheet, nerefreshuj (aby sa nebilo s gestami)
     if (notificationsMounted || joinMounted || langMounted) return;
 
     setRefreshing(true);
@@ -428,7 +426,6 @@ export default function TabTwoScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* vlastný indikátor - viditeľný vždy pri refresh */}
       {refreshing && (
         <View style={styles.refreshRow}>
           <ActivityIndicator />
@@ -539,7 +536,7 @@ export default function TabTwoScreen() {
 
               <ScrollView
                 style={{ flex: 1 }}
-                contentContainerStyle={{ paddingBottom: 20 }}
+                contentContainerStyle={{ paddingBottom: vh(2.5) }}
                 showsVerticalScrollIndicator={false}
               >
                 {binsOverLimit.length === 0 ? (
@@ -676,69 +673,76 @@ export default function TabTwoScreen() {
 }
 
 /* =====================
-   STYLES
+   STYLES (responsive len cez width/height)
 ===================== */
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    paddingTop: 50,
+    paddingTop: vh(6),
     alignItems: "center",
     backgroundColor: "white",
-    paddingBottom: 24,
+    paddingBottom: vh(3),
   },
+
   header: {
     width: "100%",
-    paddingTop: 14,
-    paddingHorizontal: 30,
+    paddingTop: vh(1.2),
+    paddingHorizontal: vw(6.5),
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
-  close: { fontSize: 28, fontWeight: "bold" },
+
+  close: { fontSize: fs(28), fontWeight: "bold" },
+
+  logo: {
+    width: Math.max(vw(12), 42),
+    height: Math.max(vw(12), 42),
+  },
 
   refreshRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    marginTop: 10,
-    marginBottom: 6,
-  },
-  refreshText: {
-    color: "#8E8E93",
-    fontSize: 13,
+    gap: Math.max(vw(2.2), 8),
+    marginTop: vh(1.2),
+    marginBottom: vh(0.8),
   },
 
-  section: { marginTop: 20, fontSize: 14, fontWeight: "bold" },
-  organization: { marginTop: 12, fontSize: 18, fontWeight: "600" },
+  refreshText: {
+    color: "#8E8E93",
+    fontSize: fs(13),
+  },
+
+  section: { marginTop: vh(2.2), fontSize: fs(14), fontWeight: "bold" },
+
+  organization: { marginTop: vh(1.4), fontSize: fs(18), fontWeight: "600" },
 
   listItem: {
     width: "90%",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingVertical: vh(1.8),
+    paddingHorizontal: vw(4.2),
     borderBottomWidth: 1,
     borderBottomColor: "#E5E5E5",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 10,
+    marginTop: vh(1.2),
   },
-  listTitle: { fontSize: 16, fontWeight: "500" },
-  listSubtitle: { fontSize: 14, color: "#8E8E93" },
-  chevron: { fontSize: 24, color: "#C7C7CC" },
 
-  logo: {
-    width: 50,
-    height: 50,
-  },
+  listTitle: { fontSize: fs(16), fontWeight: "500" },
+
+  listSubtitle: { fontSize: fs(14), color: "#8E8E93", marginTop: vh(0.4) },
+
+  chevron: { fontSize: fs(24), color: "#C7C7CC" },
 
   modalWrapper: { flex: 1, justifyContent: "flex-end" },
 
   bottomModalBox: {
-    height: "60%",
+    height: Math.max(vh(60), 420),
     backgroundColor: "white",
-    padding: 20,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    padding: vw(5),
+    borderTopLeftRadius: Math.max(vw(5), 20),
+    borderTopRightRadius: Math.max(vw(5), 20),
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.15,
@@ -747,106 +751,124 @@ const styles = StyleSheet.create({
   },
 
   handleTouchArea: {
-    paddingTop: 10,
-    paddingBottom: 14,
-    marginTop: -6,
+    paddingTop: vh(1),
+    paddingBottom: vh(1.6),
+    marginTop: -vh(0.6),
   },
 
   modalHandle: {
-    width: 40,
-    height: 5,
+    width: Math.max(vw(10), 40),
+    height: Math.max(vh(0.6), 5),
     backgroundColor: "#D1D1D6",
     borderRadius: 3,
     alignSelf: "center",
-    marginBottom: 10,
+    marginBottom: vh(1.2),
   },
 
-  modalTitle: { fontSize: 18, fontWeight: "700", marginBottom: 12 },
+  modalTitle: { fontSize: fs(18), fontWeight: "700", marginBottom: vh(1.4) },
 
   binItem: {
-    paddingVertical: 14,
+    paddingVertical: vh(1.8),
     borderBottomWidth: 1,
     borderBottomColor: "#E5E5E5",
   },
-  binName: { fontSize: 16, fontWeight: "600" },
-  binLocation: { fontSize: 14, color: "#8E8E93", marginTop: 2 },
+
+  binName: { fontSize: fs(16), fontWeight: "600" },
+
+  binLocation: { fontSize: fs(14), color: "#8E8E93", marginTop: vh(0.3) },
+
   binPercent: {
-    fontSize: 14,
-    marginTop: 4,
+    fontSize: fs(14),
+    marginTop: vh(0.6),
     color: "#FF3B30",
     fontWeight: "600",
   },
-  emptyText: { textAlign: "center", color: "#8E8E93", marginTop: 20 },
+
+  emptyText: {
+    textAlign: "center",
+    color: "#8E8E93",
+    marginTop: vh(2.5),
+    fontSize: fs(14),
+  },
 
   joinInput: {
     borderWidth: 1,
     borderColor: "#FF9627",
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: Math.max(vw(2.2), 8),
+    paddingVertical: vh(1.4),
+    paddingHorizontal: vw(3.2),
     width: "100%",
-    fontSize: 18,
+    fontSize: fs(18),
     textAlign: "center",
-    marginTop: 6,
-    marginBottom: 12,
-    letterSpacing: 3,
-  },
-  joinButton: {
-    backgroundColor: "#FF9627",
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  joinButtonText: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  joinError: {
-    color: "#D32F2F",
-    marginBottom: 10,
-    textAlign: "center",
-  },
-  joinHint: {
-    marginTop: 12,
-    textAlign: "center",
-    color: "#8E8E93",
-    fontSize: 12,
+    marginTop: vh(0.8),
+    marginBottom: vh(1.4),
+    letterSpacing: Math.max(vw(0.8), 3),
   },
 
-  // language rows
+  joinButton: {
+    backgroundColor: "#FF9627",
+    paddingVertical: vh(1.8),
+    borderRadius: Math.max(vw(2.2), 8),
+    alignItems: "center",
+  },
+
+  joinButtonText: {
+    color: "white",
+    fontSize: fs(18),
+    fontWeight: "600",
+  },
+
+  joinError: {
+    color: "#D32F2F",
+    marginBottom: vh(1.2),
+    textAlign: "center",
+    fontSize: fs(13),
+  },
+
+  joinHint: {
+    marginTop: vh(1.6),
+    textAlign: "center",
+    color: "#8E8E93",
+    fontSize: fs(12),
+  },
+
   langRow: {
     width: "100%",
     borderWidth: 1,
     borderColor: "#E5E5E5",
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
+    borderRadius: Math.max(vw(3.2), 12),
+    paddingVertical: vh(1.8),
+    paddingHorizontal: vw(4),
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 10,
+    marginTop: vh(1.2),
   },
+
   langRowActive: {
     borderColor: "#FF9627",
   },
+
   langText: {
-    fontSize: 16,
+    fontSize: fs(16),
     fontWeight: "600",
   },
+
   langCheck: {
-    fontSize: 18,
+    fontSize: fs(18),
     fontWeight: "800",
   },
 
-  // logout
   logoutItem: {
     borderBottomColor: "transparent",
-    marginTop: 18,
+    marginTop: vh(2.2),
   },
+
   logoutTitle: {
     color: "#FF3B30",
     fontWeight: "700",
   },
+
   logoutChevron: {
     color: "#FF3B30",
   },

@@ -27,6 +27,15 @@ type CityItem = {
   offlineCount: number;
 };
 
+const { width: W, height: H } = Dimensions.get("window");
+
+// helpers iba z width/height
+const vw = (p: number) => (W * p) / 100;
+const vh = (p: number) => (H * p) / 100;
+
+// jemná typografia viazaná len na width
+const fs = (base: number) => Math.max(12, (base * W) / 375);
+
 export default function CityListScreen() {
   const { profile } = useAuth();
   const { t } = useLanguage();
@@ -96,7 +105,6 @@ export default function CityListScreen() {
 
         const uniqueCities = Array.from(cityMap.values());
         setCities(uniqueCities);
-        // filter sa nastaví v useEffect podľa search, ale pre istotu:
         setFilteredCities(uniqueCities);
       } else {
         setOrganisationName(profile.organisation ?? null);
@@ -111,14 +119,12 @@ export default function CityListScreen() {
     }
   };
 
-  // prvé načítanie
   useEffect(() => {
     if (!profile?.id_org) return;
     fetchCities();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id_org]);
 
-  // pull-to-refresh handler
   const onRefresh = async () => {
     setRefreshing(true);
     try {
@@ -128,7 +134,6 @@ export default function CityListScreen() {
     }
   };
 
-  // Filter miest podľa vyhľadávania
   useEffect(() => {
     const q = search.toLowerCase();
     const filtered = cities.filter(
@@ -139,7 +144,6 @@ export default function CityListScreen() {
     setFilteredCities(filtered);
   }, [search, cities]);
 
-  // Dynamické priblíženie mapy
   useEffect(() => {
     if (mapRef.current && filteredCities.length > 0) {
       const coords = filteredCities.map((c) => ({
@@ -158,7 +162,12 @@ export default function CityListScreen() {
         );
       } else {
         mapRef.current.fitToCoordinates(coords, {
-          edgePadding: { top: 150, right: 150, bottom: 150, left: 150 },
+          edgePadding: {
+            top: vh(10),
+            right: vw(10),
+            bottom: vh(10),
+            left: vw(10),
+          },
           animated: true,
         });
       }
@@ -169,12 +178,15 @@ export default function CityListScreen() {
     return (
       <View style={[styles.container, styles.center]}>
         <ActivityIndicator size="large" />
-        <Text style={{ marginTop: 10, color: "#FF9627" }}>
+        <Text style={{ marginTop: vh(1.2), color: "#FF9627" }}>
           {t("loadingProfile")}
         </Text>
       </View>
     );
   }
+
+  const mapHeight = Math.min(vh(32), 320); // responsive cez height
+  const orgMinHeight = Math.max(vh(52), 360);
 
   return (
     <ScrollView
@@ -199,7 +211,7 @@ export default function CityListScreen() {
       {filteredCities.length > 0 && (
         <MapView
           ref={mapRef}
-          style={styles.map}
+          style={[styles.map, { height: mapHeight }]}
           initialRegion={{
             latitude: filteredCities[0].latitude,
             longitude: filteredCities[0].longitude,
@@ -222,13 +234,19 @@ export default function CityListScreen() {
       )}
 
       {/* ORGANIZÁCIA */}
-      <View style={[styles.bottomSection, styles.orgSection]}>
+      <View
+        style={[
+          styles.bottomSection,
+          styles.orgSection,
+          { minHeight: orgMinHeight },
+        ]}
+      >
         <Text style={styles.orgName}>{organisationName ?? t("notSet")}</Text>
 
         <Text style={styles.branchesTitle}>{t("yourBranches")}</Text>
 
         {/* ZOZNAM MIEST */}
-        <View style={{ marginTop: 12 }}>
+        <View style={{ marginTop: vh(1.5) }}>
           {filteredCities.map((city) => (
             <Link
               key={city.name_city}
@@ -241,12 +259,16 @@ export default function CityListScreen() {
               <Pressable style={styles.card}>
                 <View style={styles.rowContent}>
                   <View style={styles.leftBox}>
-                    <FontAwesome name="map-marker" size={24} color="white" />
+                    <FontAwesome
+                      name="map-marker"
+                      size={Math.round(vw(6.2))}
+                      color="white"
+                    />
                   </View>
 
                   <View style={styles.rightBox}>
                     <Text style={styles.title}>{city.name_city}</Text>
-                    <Text>
+                    <Text style={styles.subText}>
                       {t("online")}: {city.onlineCount}, {t("offline")}:{" "}
                       {city.offlineCount}
                     </Text>
@@ -257,17 +279,22 @@ export default function CityListScreen() {
           ))}
         </View>
 
-        {/* keď nie sú výsledky */}
         {!loading && !error && filteredCities.length === 0 ? (
-          <View style={{ paddingVertical: 20 }}>
-            <Text style={{ textAlign: "center", color: "#8E8E93" }}>
+          <View style={{ paddingVertical: vh(2.2) }}>
+            <Text
+              style={{
+                textAlign: "center",
+                color: "#8E8E93",
+                fontSize: fs(14),
+              }}
+            >
               {t("noBranchesFound")}
             </Text>
           </View>
         ) : null}
       </View>
 
-      {/* LOADING (len pri prvom načítaní, nie pri pull-to-refresh) */}
+      {/* LOADING */}
       {loading && (
         <View style={styles.center}>
           <ActivityIndicator size="large" />
@@ -277,7 +304,7 @@ export default function CityListScreen() {
       {/* ERROR */}
       {error && (
         <View style={styles.center}>
-          <Text style={{ color: "red" }}>
+          <Text style={{ color: "red", fontSize: fs(14) }}>
             {t("errorLabel")}: {error}
           </Text>
         </View>
@@ -286,79 +313,82 @@ export default function CityListScreen() {
   );
 }
 
-const { width, height } = Dimensions.get("window");
-const scale = width / 375;
-
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, backgroundColor: "white" },
+  container: {
+    flexGrow: 1,
+    backgroundColor: "white",
+    paddingBottom: vh(2),
+  },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  section: { paddingHorizontal: 12, marginBottom: 12 },
+
+  section: {
+    paddingHorizontal: vw(3.2),
+    marginBottom: vh(1.2),
+  },
 
   searchBar: {
-    height: 50,
+    height: Math.max(vh(6.2), 46),
     backgroundColor: "#F6F6F6",
-    borderRadius: 8,
+    borderRadius: Math.max(vw(2.2), 8),
     borderColor: "#E2E2E2",
     borderWidth: 1,
-    paddingHorizontal: 16,
-    marginTop: 10,
+    paddingHorizontal: vw(4.2),
+    marginTop: vh(1.2),
     color: "black",
-    fontSize: 16,
+    fontSize: fs(16),
   },
 
   map: {
     width: "100%",
-    height: 250,
     borderRadius: 0,
     overflow: "hidden",
-    marginTop: 20,
+    marginTop: vh(1.6),
   },
 
   bottomSection: {
     flex: 1,
     backgroundColor: "white",
-    paddingHorizontal: 12,
-    paddingTop: 10,
+    paddingHorizontal: vw(3.2),
+    paddingTop: vh(1.2),
   },
 
   orgSection: {
     flex: 1,
-    marginTop: -25,
+    marginTop: -vh(3),
     backgroundColor: "white",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
+    paddingVertical: vh(1.2),
+    paddingHorizontal: vw(3.2),
+    borderTopLeftRadius: Math.max(vw(3.2), 12),
+    borderTopRightRadius: Math.max(vw(3.2), 12),
     zIndex: 5,
     elevation: 5,
     shadowColor: "#000",
     shadowOpacity: 0.15,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: -2 },
-    minHeight: Dimensions.get("window").height / 2,
   },
 
   orgName: {
-    fontSize: 28,
-    paddingTop: 16,
-    paddingBottom: 16,
+    fontSize: fs(28),
+    paddingTop: vh(2),
+    paddingBottom: vh(2),
     fontWeight: "900",
     color: "black",
   },
 
   branchesTitle: {
-    fontSize: 14,
+    fontSize: fs(14),
     fontWeight: "bold",
-    paddingTop: 10,
-    paddingBottom: 10,
+    paddingTop: vh(1.2),
+    paddingBottom: vh(1.2),
     color: "black",
   },
 
   card: {
-    height: height * 0.1,
-    borderRadius: 8,
+    height: Math.max(vh(9.5), 70),
+    borderRadius: Math.max(vw(2.2), 8),
     overflow: "hidden",
-    marginBottom: 12,
+    marginBottom: vh(1.4),
     flexDirection: "row",
   },
 
@@ -378,12 +408,19 @@ const styles = StyleSheet.create({
     width: "75%",
     backgroundColor: "#f3f3f3",
     justifyContent: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: vw(4.2),
+    paddingVertical: vh(1),
   },
 
   title: {
     color: "black",
-    fontSize: 14 * scale,
+    fontSize: fs(15),
     fontWeight: "800",
+  },
+
+  subText: {
+    marginTop: vh(0.5),
+    color: "black",
+    fontSize: fs(13),
   },
 });

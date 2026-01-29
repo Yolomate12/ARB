@@ -21,6 +21,11 @@ type StreetItem = {
   offlineCount: number;
 };
 
+const { width: W, height: H } = Dimensions.get("window");
+const vw = (p: number) => (W * p) / 100;
+const vh = (p: number) => (H * p) / 100;
+const fs = (base: number) => Math.max(12, (base * W) / 375);
+
 export default function StreetListScreen() {
   const { t } = useLanguage();
   const { city } = useLocalSearchParams<{ city: string }>();
@@ -30,7 +35,6 @@ export default function StreetListScreen() {
   const [organisationName, setOrganisationName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // reload
   const [refreshing, setRefreshing] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
@@ -100,7 +104,6 @@ export default function StreetListScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [city]);
 
-  // pull-to-refresh handler
   const onRefresh = async () => {
     setRefreshing(true);
     try {
@@ -110,7 +113,6 @@ export default function StreetListScreen() {
     }
   };
 
-  // filter
   useEffect(() => {
     const q = search.trim().toLowerCase();
     if (!q) {
@@ -151,7 +153,6 @@ export default function StreetListScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      {/* vlastný indikátor - viditeľný vždy pri refresh */}
       {refreshing && (
         <View style={styles.refreshRow}>
           <ActivityIndicator />
@@ -170,7 +171,7 @@ export default function StreetListScreen() {
         />
       </View>
 
-      {/* HEADER: Organizácia / Mesto */}
+      {/* HEADER */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>
           {organisationName ? `${organisationName} / ${city}` : city}
@@ -190,12 +191,18 @@ export default function StreetListScreen() {
           >
             <Pressable style={styles.card}>
               <View style={styles.leftBox}>
-                <FontAwesome name="map-marker" size={24} color="white" />
+                <FontAwesome
+                  name="map-marker"
+                  size={Math.round(vw(6.2))}
+                  color="white"
+                />
               </View>
 
               <View style={styles.rightBox}>
-                <Text style={styles.streetName}>{street.name_street}</Text>
-                <Text style={styles.statusText}>
+                <Text style={styles.streetName} numberOfLines={1}>
+                  {street.name_street}
+                </Text>
+                <Text style={styles.statusText} numberOfLines={1}>
                   {t("online")}: {street.onlineCount} | {t("offline")}:{" "}
                   {street.offlineCount}
                 </Text>
@@ -205,8 +212,14 @@ export default function StreetListScreen() {
         ))}
 
         {!filteredStreets.length ? (
-          <View style={{ paddingVertical: 20 }}>
-            <Text style={{ textAlign: "center", color: "#8E8E93" }}>
+          <View style={{ paddingVertical: vh(2.5) }}>
+            <Text
+              style={{
+                textAlign: "center",
+                color: "#8E8E93",
+                fontSize: fs(14),
+              }}
+            >
               {t("noStreetsFound")}
             </Text>
           </View>
@@ -216,71 +229,78 @@ export default function StreetListScreen() {
   );
 }
 
-const { width, height } = Dimensions.get("window");
-const scale = width / 375;
-
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     backgroundColor: "white",
-    paddingBottom: 20,
+    paddingBottom: vh(2.5),
   },
+
   center: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
+
   error: {
     color: "red",
-    fontSize: 16,
+    fontSize: fs(16),
+    textAlign: "center",
+    paddingHorizontal: vw(6),
   },
 
   refreshRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    marginTop: 10,
-    marginBottom: 6,
-    paddingHorizontal: 16,
+    gap: Math.max(vw(2.2), 8),
+    marginTop: vh(1.2),
+    marginBottom: vh(0.8),
+    paddingHorizontal: vw(4.2),
   },
+
   refreshText: {
     color: "#8E8E93",
-    fontSize: 13,
+    fontSize: fs(13),
   },
 
   searchContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: vw(4.2),
+    paddingVertical: vh(1.4),
   },
+
   searchInput: {
-    height: 50,
-    fontSize: 16,
-    borderRadius: 8,
+    height: Math.max(vh(6.2), 46),
+    fontSize: fs(16),
+    borderRadius: Math.max(vw(2.2), 8),
     borderWidth: 1,
     borderColor: "#E2E2E2",
-    paddingHorizontal: 16,
+    paddingHorizontal: vw(4.2),
     backgroundColor: "#F6F6F6",
     color: "#1E1E1E",
   },
+
   header: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: vw(4.2),
+    paddingVertical: vh(1),
   },
+
   headerTitle: {
-    fontSize: 20,
+    fontSize: fs(20),
     fontWeight: "bold",
     color: "#1E1E1E",
     opacity: 0.5,
   },
+
   list: {
-    paddingHorizontal: 16,
+    paddingHorizontal: vw(4.2),
   },
+
   card: {
     flexDirection: "row",
-    height: height * 0.1,
-    borderRadius: 8,
+    height: Math.max(vh(9.5), 70),
+    borderRadius: Math.max(vw(2.2), 8),
     overflow: "hidden",
-    marginBottom: 12,
+    marginBottom: vh(1.4),
     backgroundColor: "#f3f3f3",
     elevation: 4,
     shadowColor: "#000",
@@ -288,25 +308,29 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 3 },
   },
+
   leftBox: {
     width: "25%",
     backgroundColor: "#FF9627",
     justifyContent: "center",
     alignItems: "center",
   },
+
   rightBox: {
     width: "75%",
-    paddingHorizontal: 16,
+    paddingHorizontal: vw(4.2),
     justifyContent: "center",
   },
+
   streetName: {
-    fontSize: 16 * scale,
+    fontSize: fs(16),
     fontWeight: "800",
     color: "black",
   },
+
   statusText: {
-    fontSize: 14 * scale,
+    fontSize: fs(14),
     color: "#666",
-    marginTop: 2,
+    marginTop: vh(0.3),
   },
 });

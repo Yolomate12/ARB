@@ -32,7 +32,9 @@ export default function RootLayout() {
   }, [error]);
 
   useEffect(() => {
-    if (loaded) SplashScreen.hideAsync();
+    if (loaded) {
+      SplashScreen.hideAsync();
+    }
   }, [loaded]);
 
   if (!loaded) return null;
@@ -47,11 +49,22 @@ function RootLayoutNav() {
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <LanguageProvider>
         <AuthProvider>
-          <Stack screenOptions={{ headerShown: false }}>
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              animation: "none", // ✅ fix na rnscreens / new-arch thread crash
+            }}
+          >
             <Stack.Screen name="(user)" />
             <Stack.Screen name="(admin)" />
             <Stack.Screen name="(auth)" />
-            <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+            <Stack.Screen
+              name="modal"
+              options={{
+                presentation: "modal",
+                animation: "none",
+              }}
+            />
           </Stack>
         </AuthProvider>
       </LanguageProvider>
