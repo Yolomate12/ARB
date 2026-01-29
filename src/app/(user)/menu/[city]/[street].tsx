@@ -265,7 +265,7 @@ const styles = StyleSheet.create({
 
   searchContainer: {
     paddingHorizontal: vw(4.2),
-    paddingVertical: vh(1.4),
+    paddingVertical: vh(1.6),
   },
 
   searchInput: {

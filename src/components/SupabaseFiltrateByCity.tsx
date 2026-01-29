@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
     borderColor: "#E2E2E2",
     borderWidth: 1,
     paddingHorizontal: vw(4.2),
-    marginTop: vh(1.2),
+    marginTop: vh(1.6),
     color: "black",
     fontSize: fs(16),
   },

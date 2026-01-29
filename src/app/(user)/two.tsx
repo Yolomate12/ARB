@@ -53,6 +53,7 @@ const fs = (b: number) => Math.max(12, (b * W) / 375);
 ===================== */
 export default function TabTwoScreen() {
   const { session } = useAuth();
+  const userEmail = session?.user?.email ?? "—";
   const router = useRouter();
   const { lang, setLang, t } = useLanguage();
 
@@ -439,6 +440,13 @@ export default function TabTwoScreen() {
         {loading ? "Načítavam…" : organizationName}
       </Text>
 
+      <TouchableOpacity style={styles.listItem}>
+        <View>
+          <Text style={styles.listTitle}>Účet</Text>
+          <Text style={styles.listSubtitle}>{userEmail}</Text>
+        </View>
+        <Text style={styles.chevron}>›</Text>
+      </TouchableOpacity>
       {/* DEVICES */}
       <TouchableOpacity style={styles.listItem}>
         <View>
