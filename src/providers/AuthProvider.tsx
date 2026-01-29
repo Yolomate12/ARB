@@ -1,13 +1,10 @@
-import { AUTH_STORAGE_KEY, supabase } from "@/lib/supabase";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { supabase } from "@/lib/supabase";
 import { Session } from "@supabase/supabase-js";
 import {
-  PropsWithChildren,
   createContext,
+  PropsWithChildren,
   useContext,
   useEffect,
-  useMemo,
-  useRef,
   useState,
 } from "react";
 
@@ -38,20 +35,12 @@ export default function AuthProvider({ children }: PropsWithChildren) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // aby sa fetchProfile nepúšťal paralelne a neprepisoval sa
-  const profileFetchId = useRef(0);
-
   const fetchProfile = async (userId: string) => {
-    const current = ++profileFetchId.current;
-
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, group, username")
+      .select("*")
       .eq("id", userId)
       .single();
-
-    // ak medzičasom prišiel nový request, tento ignoruj
-    if (current !== profileFetchId.current) return;
 
     if (error) {
       setProfile(null);
@@ -61,43 +50,28 @@ export default function AuthProvider({ children }: PropsWithChildren) {
     setProfile(data);
   };
 
-  // "hard" signOut – vyčistí aj lokálny token (fix na Refresh Token Not Found)
   const signOut = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      // nič – aj keď signOut zlyhá, spravíme lokálny reset
-    }
-
-    // vyčisti lokálny storage token (kľúč čo používa supabase)
-    try {
-      await AsyncStorage.removeItem(AUTH_STORAGE_KEY);
-    } catch {}
-
+    await supabase.auth.signOut();
     setSession(null);
     setProfile(null);
   };
 
   useEffect(() => {
-    let mounted = true;
-
     const init = async () => {
       setLoading(true);
 
       const { data, error } = await supabase.auth.getSession();
 
-      // ak tokeny sú rozbité alebo refresh token chýba → reset
       if (error) {
+        // ⛔ neplatný refresh token → reset
         await signOut();
-        if (mounted) setLoading(false);
+        setLoading(false);
         return;
       }
 
-      if (!mounted) return;
-
       setSession(data.session);
 
-      if (data.session?.user?.id) {
+      if (data.session?.user) {
         await fetchProfile(data.session.user.id);
       } else {
         setProfile(null);
@@ -108,34 +82,31 @@ export default function AuthProvider({ children }: PropsWithChildren) {
 
     init();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
-        // niekedy pri štarte príde null session -> normálne to len nastav
-        setSession(newSession ?? null);
-
-        if (!newSession?.user?.id) {
-          setProfile(null);
-          return;
-        }
-
-        // ✅ keď refresh zlyhá alebo token chýba, vyčisti všetko a pošli na login
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        // 🔥 TOTO rieši tvoju chybu
         if (event === "TOKEN_REFRESH_FAILED") {
           await signOut();
           return;
         }
 
-        // pri SIGNED_IN / TOKEN_REFRESHED / USER_UPDATED načítaj profil
-        await fetchProfile(newSession.user.id);
+        setSession(session);
+
+        if (!session) {
+          setProfile(null);
+          return;
+        }
+
+        await fetchProfile(session.user.id);
       },
     );
 
     return () => {
-      mounted = false;
-      sub.subscription.unsubscribe();
+      listener.subscription.unsubscribe();
     };
   }, []);
 
-  const isAdmin = useMemo(() => profile?.group === "ADMIN", [profile?.group]);
+  const isAdmin = profile?.group === "ADMIN";
 
   return (
     <AuthContext.Provider
