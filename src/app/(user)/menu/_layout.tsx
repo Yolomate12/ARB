@@ -1,6 +1,12 @@
 import Colors from "@/constants/Colors";
 import { Link, Stack } from "expo-router";
-import { Image, Pressable, StyleSheet, View } from "react-native";
+import { Dimensions, Image, Pressable, StyleSheet, View } from "react-native";
+
+const { width: W } = Dimensions.get("window");
+const clamp = (n: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, n));
+
+const s = (base: number) => clamp((base * W) / 375, base * 0.85, base * 1.25);
 
 export default function MenuStack() {
   return (
@@ -19,7 +25,7 @@ export default function MenuStack() {
 
         headerRight: () => (
           <Link href="/(user)/two" asChild>
-            <Pressable>
+            <Pressable hitSlop={s(10)}>
               <View style={styles.headerItem}>
                 <View style={styles.menuIcon}>
                   <View style={styles.menuLine} />
@@ -37,30 +43,31 @@ export default function MenuStack() {
     </Stack>
   );
 }
+
 const styles = StyleSheet.create({
   headerItem: {
-    height: 44,               // 🔥 dôležité pre iOS "bublinu"
+    height: s(40), // responzívne
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 10,
+    paddingHorizontal: s(10),
   },
 
   logo: {
-    width: 50,
-    height: 50,
+    width: s(44),
+    height: s(44),
     resizeMode: "contain",
   },
 
   menuIcon: {
     flexDirection: "column",
     justifyContent: "space-between",
-    height: 12,
+    height: s(12),
   },
 
   menuLine: {
-    height: 4,
-    width: 23,
+    height: s(4),
+    width: s(23),
     backgroundColor: Colors.orange.background,
-    borderRadius: 20,
+    borderRadius: s(20),
   },
 });

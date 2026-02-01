@@ -1,0 +1,300 @@
+import Colors from "@/constants/Colors";
+import { supabase } from "@/lib/supabase";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { useRouter } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+
+type OrgRow = {
+  id_org: number;
+  nazov_org: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  online_count: number;
+  offline_count: number;
+};
+
+const ORANGE = Colors.orange?.background ?? "#F7941D";
+
+// koľko položiek považujeme za "dlhý zoznam"
+const STICKY_THRESHOLD = 4;
+
+export default function AdminOrganizationsScreen() {
+  const [rows, setRows] = useState<OrgRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const load = async () => {
+    setLoading(true);
+
+    const { data, error } = await supabase
+      .from("organisation_list")
+      .select("id_org,nazov_org,latitude,longitude,online_count,offline_count")
+      .order("nazov_org", { ascending: true });
+
+    if (error) {
+      console.log("organisation_list error:", error);
+      setRows([]);
+    } else {
+      setRows((data ?? []) as OrgRow[]);
+    }
+
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  };
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+
+    return rows.filter((r) => {
+      const hay = [r.nazov_org, String(r.id_org)]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return hay.includes(q);
+    });
+  }, [rows, search]);
+
+  const sticky = filtered.length >= STICKY_THRESHOLD;
+
+  const Buttons = (
+    <>
+      <Pressable
+        style={styles.outlineBtn}
+        onPress={() => router.push("/(admin)/menu/addOrganisation")}
+      >
+        <Text style={styles.outlineText}>NOVÁ ORGANIZÁCIA</Text>
+      </Pressable>
+
+      <Pressable
+        style={styles.filledBtn}
+        onPress={() => router.push("/(admin)/menu/addDevice")}
+      >
+        <Text style={styles.filledText}>NOVÉ ZARIADENIE</Text>
+      </Pressable>
+    </>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color={ORANGE} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Organizácie</Text>
+
+      {/* Search (full width) */}
+      <View style={styles.searchBox}>
+        <TextInput
+          placeholder="Search..."
+          placeholderTextColor="#A6A6A6"
+          value={search}
+          onChangeText={setSearch}
+          style={styles.searchInput}
+        />
+        <FontAwesome name="search" size={18} color="#111" />
+      </View>
+
+      <FlatList
+        data={filtered}
+        keyExtractor={(item) => String(item.id_org)}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        // keď sticky bar svieti, pridáme paddingBottom aby neprekryl obsah
+        contentContainerStyle={{
+          paddingTop: 14,
+          paddingBottom: sticky ? 160 : 20, // 160 ~ výška sticky bar + odstup
+        }}
+        ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
+        renderItem={({ item }) => (
+          <Pressable
+            style={styles.card}
+            onPress={() => {
+              // TODO: detail organizácie / zoznam zariadení v organizácii
+            }}
+          >
+            <View style={styles.leftBlock}>
+              <FontAwesome name="map-marker" size={22} color="#fff" />
+            </View>
+
+            <View style={styles.body}>
+              <Text style={styles.name} numberOfLines={2}>
+                {item.nazov_org ?? "Bez názvu"}
+              </Text>
+
+              <Text style={styles.meta}>
+                {item.online_count} online, {item.offline_count} offline
+              </Text>
+            </View>
+
+            <FontAwesome name="chevron-right" size={16} color="#9B9B9B" />
+          </Pressable>
+        )}
+        // keď NENI sticky bar (málo položiek), tlačidlá budú hneď za zoznamom
+        ListFooterComponent={
+          !sticky ? <View style={styles.footer}>{Buttons}</View> : null
+        }
+        ListEmptyComponent={
+          <View style={{ paddingTop: 40, alignItems: "center" }}>
+            <Text style={{ color: "#777", fontWeight: "600" }}>
+              Žiadne organizácie
+            </Text>
+          </View>
+        }
+      />
+
+      {/* keď JE sticky bar (veľa položiek), tlačidlá prichytíme dole */}
+      {sticky && <View style={styles.stickyBar}>{Buttons}</View>}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#fff",
+    paddingHorizontal: 18,
+    paddingTop: 22,
+  },
+
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+
+  title: {
+    fontSize: 32,
+    fontWeight: "900",
+    color: "#111",
+    marginBottom: 12,
+  },
+
+  searchBox: {
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E6E6E6",
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#fff",
+  },
+
+  searchInput: {
+    flex: 1,
+    marginRight: 10,
+    fontSize: 15,
+    color: "#111",
+  },
+
+  card: {
+    height: 90,
+    borderRadius: 18,
+    backgroundColor: "#F6F7FB",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingRight: 14,
+    overflow: "hidden",
+  },
+
+  leftBlock: {
+    width: 86,
+    height: "100%",
+    backgroundColor: ORANGE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  body: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 6,
+  },
+
+  name: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#111",
+  },
+
+  meta: {
+    fontSize: 13,
+    color: "#6F6F6F",
+    fontWeight: "700",
+  },
+
+  // keď je málo položiek
+  footer: {
+    marginTop: 16,
+    gap: 12,
+  },
+
+  // keď je veľa položiek -> sticky
+  stickyBar: {
+    position: "absolute",
+    left: 18,
+    right: 18,
+    bottom: 14,
+    gap: 12,
+    backgroundColor: "#fff",
+    paddingTop: 12,
+    // jemný “oddeľovací” efekt
+    borderTopWidth: 1,
+    borderTopColor: "#EFEFEF",
+  },
+
+  outlineBtn: {
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: ORANGE,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+  },
+
+  outlineText: {
+    color: ORANGE,
+    fontWeight: "900",
+    letterSpacing: 0.6,
+  },
+
+  filledBtn: {
+    height: 56,
+    borderRadius: 14,
+    backgroundColor: ORANGE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  filledText: {
+    color: "#fff",
+    fontWeight: "900",
+    letterSpacing: 0.6,
+  },
+});

@@ -1,16 +1,16 @@
-import { useColorScheme } from '@/components/useColorScheme';
-import Colors from '@/constants/Colors';
-import { useAuth } from '@/providers/AuthProvider';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
-import { Tabs, useRouter } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { useColorScheme } from "@/components/useColorScheme";
+import Colors from "@/constants/Colors";
+import { useAuth } from "@/providers/AuthProvider";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
+import { Tabs, useRouter } from "expo-router";
+import React, { useEffect, useRef } from "react";
+import { ActivityIndicator, View } from "react-native";
 
 function TabBarIcon({
   name,
   color,
 }: {
-  name: React.ComponentProps<typeof FontAwesome>['name'];
+  name: React.ComponentProps<typeof FontAwesome>["name"];
   color: string;
 }) {
   return <FontAwesome size={25} name={name} color={color} />;
@@ -27,7 +27,7 @@ export default function TabLayout() {
     if (loading) return;
     if (!session && !redirected.current) {
       redirected.current = true;
-      router.replace('/(auth)/sign-in');
+      router.replace("/(auth)/sign-in");
     }
   }, [loading, session]);
 
@@ -35,7 +35,7 @@ export default function TabLayout() {
   useEffect(() => {
     if (!loading && session && profile && !isAdmin && !redirected.current) {
       redirected.current = true;
-      router.replace('/');
+      router.replace("/");
     }
   }, [loading, session, profile, isAdmin]);
 
@@ -43,7 +43,7 @@ export default function TabLayout() {
 
   if (!ready) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
         <ActivityIndicator size="large" color={Colors.light.tint} />
       </View>
     );
@@ -52,8 +52,8 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: false,          // header rieši Stack
-        tabBarStyle: { display: 'none' }, // tabs sú skryté
+        headerShown: false, // header rieši Stack
+        tabBarStyle: { display: "none" }, // tabs sú skryté
       }}
     >
       {/* root – skrytý */}
@@ -63,10 +63,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="menu"
         options={{
-          title: 'Menu',
-          tabBarIcon: ({ color }) => (
-            <TabBarIcon name="home" color={color} />
-          ),
+          title: "Menu",
+          tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
         }}
       />
 
@@ -74,10 +72,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="two"
         options={{
-          title: 'Profile',
-          tabBarIcon: ({ color }) => (
-            <TabBarIcon name="user" color={color} />
-          ),
+          title: "Profile",
+          tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
         }}
       />
     </Tabs>
