@@ -24,14 +24,13 @@ type OrgRow = {
 };
 
 const ORANGE = Colors.orange?.background ?? "#F7941D";
-
-// koľko položiek považujeme za "dlhý zoznam"
 const STICKY_THRESHOLD = 4;
 
 export default function AdminOrganizationsScreen() {
+  const router = useRouter();
+
   const [rows, setRows] = useState<OrgRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -108,7 +107,6 @@ export default function AdminOrganizationsScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Organizácie</Text>
 
-      {/* Search (full width) */}
       <View style={styles.searchBox}>
         <TextInput
           placeholder="Search..."
@@ -126,17 +124,22 @@ export default function AdminOrganizationsScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
-        // keď sticky bar svieti, pridáme paddingBottom aby neprekryl obsah
         contentContainerStyle={{
           paddingTop: 14,
-          paddingBottom: sticky ? 160 : 20, // 160 ~ výška sticky bar + odstup
+          paddingBottom: sticky ? 160 : 20,
         }}
         ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
         renderItem={({ item }) => (
           <Pressable
             style={styles.card}
             onPress={() => {
-              // TODO: detail organizácie / zoznam zariadení v organizácii
+              router.push({
+                pathname: "/(admin)/menu/organisation/[id_org]",
+                params: {
+                  id_org: String(item.id_org),
+                  nazov_org: item.nazov_org ?? "",
+                },
+              });
             }}
           >
             <View style={styles.leftBlock}>
@@ -156,7 +159,6 @@ export default function AdminOrganizationsScreen() {
             <FontAwesome name="chevron-right" size={16} color="#9B9B9B" />
           </Pressable>
         )}
-        // keď NENI sticky bar (málo položiek), tlačidlá budú hneď za zoznamom
         ListFooterComponent={
           !sticky ? <View style={styles.footer}>{Buttons}</View> : null
         }
@@ -169,7 +171,6 @@ export default function AdminOrganizationsScreen() {
         }
       />
 
-      {/* keď JE sticky bar (veľa položiek), tlačidlá prichytíme dole */}
       {sticky && <View style={styles.stickyBar}>{Buttons}</View>}
     </View>
   );
@@ -248,13 +249,11 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  // keď je málo položiek
   footer: {
     marginTop: 16,
     gap: 12,
   },
 
-  // keď je veľa položiek -> sticky
   stickyBar: {
     position: "absolute",
     left: 18,
@@ -263,7 +262,6 @@ const styles = StyleSheet.create({
     gap: 12,
     backgroundColor: "#fff",
     paddingTop: 12,
-    // jemný “oddeľovací” efekt
     borderTopWidth: 1,
     borderTopColor: "#EFEFEF",
   },

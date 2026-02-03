@@ -1,7 +1,8 @@
-import { supabase } from "@/lib/supabase"; // uprav path podľa projektu
+import { supabase } from "@/lib/supabase";
 import React, { useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
+    Alert,
     FlatList,
     KeyboardAvoidingView,
     Modal,
@@ -17,10 +18,14 @@ import {
 
 type Option = { label: string; value: string };
 
-// VIEW: available_devices musí mať aspoň stĺpce: id (uuid), name (text)
 type AvailableDeviceRow = {
   id: string;
   name: string | null;
+};
+
+type OrganisationRow = {
+  id: number;
+  nazov_org: string | null;
 };
 
 function ChevronDown({ color = "#8A8A8A" }: { color?: string }) {
@@ -71,9 +76,7 @@ function SelectField({
 
             {options.length === 0 ? (
               <View style={{ padding: 12 }}>
-                <Text style={{ color: "#444" }}>
-                  Žiadne dostupné zariadenia (všetky sú už priradené).
-                </Text>
+                <Text style={{ color: "#444" }}>Žiadne položky.</Text>
                 {onRetry && (
                   <Pressable
                     style={[styles.smallBtn, { marginTop: 12 }]}
@@ -112,23 +115,41 @@ function SelectField({
 
 export default function NewDeviceScreen() {
   const [loadingDevices, setLoadingDevices] = useState(true);
+  const [loadingOrgs, setLoadingOrgs] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [deviceOptions, setDeviceOptions] = useState<Option[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<Option | null>(null);
 
-  const [deviceDesc, setDeviceDesc] = useState("");
+  const [orgOptions, setOrgOptions] = useState<Option[]>([]);
+  const [selectedOrg, setSelectedOrg] = useState<Option | null>(null);
+
   const [street, setStreet] = useState("");
-  const [zip, setZip] = useState("");
   const [city, setCity] = useState("");
   const [country, setCountry] = useState("");
 
   const canSubmit = useMemo(() => {
-    // minimum validácia (uprav si podľa potreby)
     return (
-      !!selectedDevice && street.trim().length > 0 && city.trim().length > 0
+      !!selectedOrg &&
+      !!selectedDevice &&
+      street.trim().length > 0 &&
+      city.trim().length > 0 &&
+      country.trim().length > 0 &&
+      !loadingDevices &&
+      !loadingOrgs &&
+      !submitting
     );
-  }, [selectedDevice, street, city]);
+  }, [
+    selectedOrg,
+    selectedDevice,
+    street,
+    city,
+    country,
+    loadingDevices,
+    loadingOrgs,
+    submitting,
+  ]);
 
   async function loadAvailableDevices() {
     setLoadingDevices(true);
@@ -146,13 +167,11 @@ export default function NewDeviceScreen() {
 
       const opts: Option[] = rows.map((d) => ({
         value: d.id,
-        // odporúčanie: ak name nie je unikátne, pridaj suffix id
         label: d.name ? `${d.name} (${d.id.slice(0, 8)})` : d.id,
       }));
 
       setDeviceOptions(opts);
 
-      // ak bolo vybrané zariadenie a už nie je available → zruš selection
       if (
         selectedDevice &&
         !opts.some((o) => o.value === selectedDevice.value)
@@ -166,7 +185,107 @@ export default function NewDeviceScreen() {
     }
   }
 
+  // DÔLEŽITÉ: Toto musíš napojiť na view/policy, aby si videl len orgy, ktoré smieš.
+  // Zatiaľ to ťahá z organisation priamo.
+  async function loadOrganisations() {
+    setLoadingOrgs(true);
+    setError(null);
+
+    try {
+      const { data, error: orgErr } = await supabase
+        .from("organisation")
+        .select("id, nazov_org")
+        .order("nazov_org", { ascending: true });
+
+      if (orgErr) throw orgErr;
+
+      const rows = (data ?? []) as OrganisationRow[];
+
+      const opts: Option[] = rows.map((o) => ({
+        value: String(o.id),
+        label: o.nazov_org ?? `Organisation #${o.id}`,
+      }));
+
+      setOrgOptions(opts);
+
+      if (selectedOrg && !opts.some((o) => o.value === selectedOrg.value)) {
+        setSelectedOrg(null);
+      }
+    } catch (e: any) {
+      setError(e?.message ?? "Nepodarilo sa načítať organizácie.");
+    } finally {
+      setLoadingOrgs(false);
+    }
+  }
+
+  async function handleSubmit() {
+    if (!selectedDevice || !selectedOrg) return;
+
+    const p_device_id = selectedDevice.value;
+    const p_org_id = Number(selectedOrg.value);
+
+    if (!Number.isFinite(p_org_id)) {
+      setError("Neplatná organizácia.");
+      return;
+    }
+
+    const p_country_name = country.trim();
+    const p_city_name = city.trim();
+    const p_street = street.trim();
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const { data, error: rpcErr } = await supabase.rpc(
+        "create_bin_with_address",
+        {
+          p_device_id,
+          p_org_id,
+          p_country_name,
+          p_city_name,
+          p_street,
+        },
+      );
+
+      if (rpcErr) throw rpcErr;
+
+      const binId = data as number;
+
+      setSelectedDevice(null);
+      setStreet("");
+      setCity("");
+      setCountry("");
+
+      await loadAvailableDevices();
+
+      Alert.alert("Hotovo", `Kontajner bol pridaný (bin id: ${binId}).`);
+    } catch (e: any) {
+      const raw = e?.message ?? "Nepodarilo sa uložiť kontajner.";
+
+      let friendly = raw;
+      if (typeof raw === "string") {
+        const lower = raw.toLowerCase();
+        if (lower.includes("not allowed"))
+          friendly = "Nemáš právo zapisovať do tejto organizácie.";
+        if (lower.includes("different organisation"))
+          friendly = "Zariadenie patrí do inej organizácie.";
+        if (lower.includes("already assigned")) {
+          friendly = "Toto zariadenie už niekto priradil.";
+          await loadAvailableDevices();
+        }
+        if (lower.includes("row-level security"))
+          friendly = "Nemáš práva na vytvorenie záznamu (RLS).";
+      }
+
+      setError(friendly);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   useEffect(() => {
+    loadOrganisations();
     loadAvailableDevices();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -181,17 +300,36 @@ export default function NewDeviceScreen() {
           contentContainerStyle={styles.container}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.title}>Nové zariadenie</Text>
+          <Text style={styles.title}>Nový kontajner</Text>
 
           {error ? (
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>{error}</Text>
-              <Pressable style={styles.smallBtn} onPress={loadAvailableDevices}>
-                <Text style={styles.smallBtnText}>Skúsiť znova</Text>
-              </Pressable>
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <Pressable style={styles.smallBtn} onPress={loadOrganisations}>
+                  <Text style={styles.smallBtnText}>Orgy</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.smallBtn}
+                  onPress={loadAvailableDevices}
+                >
+                  <Text style={styles.smallBtnText}>Zariadenia</Text>
+                </Pressable>
+              </View>
             </View>
           ) : null}
 
+          <Text style={styles.sectionLabel}>Organizácia</Text>
+          <SelectField
+            placeholder="Vybrať organizáciu"
+            value={selectedOrg}
+            options={orgOptions}
+            loading={loadingOrgs}
+            onChange={setSelectedOrg}
+            onRetry={loadOrganisations}
+          />
+
+          <Text style={styles.sectionLabel}>Zariadenie</Text>
           <SelectField
             placeholder="Vybrať dostupné zariadenie"
             value={selectedDevice}
@@ -201,16 +339,8 @@ export default function NewDeviceScreen() {
             onRetry={loadAvailableDevices}
           />
 
-          <Text style={styles.sectionLabel}>Popis zariadenia</Text>
-          <TextInput
-            value={deviceDesc}
-            onChangeText={setDeviceDesc}
-            placeholder="Stručný popis"
-            placeholderTextColor="#9AA0A6"
-            style={styles.input}
-          />
-
           <Text style={styles.sectionLabel}>Adresa</Text>
+
           <TextInput
             value={street}
             onChangeText={setStreet}
@@ -218,14 +348,7 @@ export default function NewDeviceScreen() {
             placeholderTextColor="#9AA0A6"
             style={styles.input}
           />
-          <TextInput
-            value={zip}
-            onChangeText={(t) => setZip(t.replace(/[^\d]/g, ""))}
-            placeholder="PSČ"
-            placeholderTextColor="#9AA0A6"
-            keyboardType="number-pad"
-            style={styles.input}
-          />
+
           <TextInput
             value={city}
             onChangeText={setCity}
@@ -233,6 +356,7 @@ export default function NewDeviceScreen() {
             placeholderTextColor="#9AA0A6"
             style={styles.input}
           />
+
           <TextInput
             value={country}
             onChangeText={setCountry}
@@ -244,26 +368,17 @@ export default function NewDeviceScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.primaryBtn,
-              (!canSubmit || loadingDevices) && { opacity: 0.5 },
-              pressed && canSubmit && !loadingDevices
-                ? { opacity: 0.85 }
-                : null,
+              (!canSubmit || submitting) && { opacity: 0.5 },
+              pressed && canSubmit && !submitting ? { opacity: 0.85 } : null,
             ]}
-            disabled={!canSubmit || loadingDevices}
-            onPress={() => {
-              // TODO: insert (address + bin) ideálne cez RPC transakciu
-              // selectedDevice.value je id zariadenia
-              console.log("SUBMIT", {
-                deviceId: selectedDevice?.value,
-                deviceDesc,
-                street,
-                zip,
-                city,
-                country,
-              });
-            }}
+            disabled={!canSubmit}
+            onPress={handleSubmit}
           >
-            <Text style={styles.primaryBtnText}>Uložiť</Text>
+            {submitting ? (
+              <ActivityIndicator />
+            ) : (
+              <Text style={styles.primaryBtnText}>Uložiť</Text>
+            )}
           </Pressable>
 
           <View style={{ height: 24 }} />
