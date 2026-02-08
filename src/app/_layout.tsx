@@ -1,3 +1,7 @@
+import "react-native-reanimated"; // nechaj úplne prvé (reanimated to chce)
+import { enableScreens } from "react-native-screens";
+enableScreens(false);
+
 import { useColorScheme } from "@/components/useColorScheme";
 import AuthProvider from "@/providers/AuthProvider";
 import { LanguageProvider } from "@/providers/LanguageProvider";
@@ -11,7 +15,6 @@ import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import "react-native-reanimated";
 
 export { ErrorBoundary } from "expo-router";
 
@@ -32,9 +35,7 @@ export default function RootLayout() {
   }, [error]);
 
   useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
+    if (loaded) SplashScreen.hideAsync();
   }, [loaded]);
 
   if (!loaded) return null;
@@ -52,7 +53,8 @@ function RootLayoutNav() {
           <Stack
             screenOptions={{
               headerShown: false,
-              animation: "none", // ✅ fix na rnscreens / new-arch thread crash
+              animation: "none",
+              gestureEnabled: false,
             }}
           >
             <Stack.Screen name="(user)" />
@@ -60,10 +62,7 @@ function RootLayoutNav() {
             <Stack.Screen name="(auth)" />
             <Stack.Screen
               name="modal"
-              options={{
-                presentation: "modal",
-                animation: "none",
-              }}
+              options={{ presentation: "modal", animation: "none" }}
             />
           </Stack>
         </AuthProvider>

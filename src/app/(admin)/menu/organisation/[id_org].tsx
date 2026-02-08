@@ -1,22 +1,19 @@
 import Colors from "@/constants/Colors";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/providers/LanguageProvider";
-import { Stack, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    FlatList,
-    Modal,
-    Pressable,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Dimensions,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
-import { AnimatedCircularProgress } from "react-native-circular-progress";
 
 type Tank = {
   device_id: string;
@@ -25,7 +22,7 @@ type Tank = {
 };
 
 type DeviceRow = {
-  bin_id: number; // ✅ z view
+  bin_id: number;
   device_id: string;
   device_name: string | null;
   status: string | null;
@@ -79,6 +76,8 @@ const normalizeTanks = (tanks: { tank_id: number; level: number | null }[]) => {
 
 export default function AdminOrganisationDevicesScreen() {
   const { t } = useLanguage();
+  const router = useRouter();
+
   const params = useLocalSearchParams<{
     id_org?: string;
     nazov_org?: string;
@@ -93,6 +92,7 @@ export default function AdminOrganisationDevicesScreen() {
 
   const idOrg = idOrgStr ? Number(idOrgStr) : NaN;
   const orgName = (orgNameStr ?? "").trim();
+  const isValidOrg = !!idOrgStr && Number.isFinite(idOrg);
 
   const [devices, setDevices] = useState<DeviceItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,30 +100,40 @@ export default function AdminOrganisationDevicesScreen() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  // ✅ modal
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selected, setSelected] = useState<DeviceItem | null>(null);
-  const [editName, setEditName] = useState("");
-  const [busy, setBusy] = useState(false);
+  // ✅ zabráni setState po unmount (už si to mal, nechávam)
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
 
-  const circleSize = vw(18);
-  const circleWidth = vw(2);
+  const safeSet = (fn: () => void) => {
+    if (aliveRef.current) fn();
+  };
+
+  // ✅ KRITICKÉ: nepoužívaj router.back() -> robí pop/removal transition
+  const goBackSafe = () => {
+    router.replace("/(admin)/menu/organisation/index");
+  };
 
   const fetchDevices = async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent ?? false;
 
-    if (!Number.isFinite(idOrg)) {
-      setError("Invalid organisation id");
-      setDevices([]);
-      setLoading(false);
+    if (!isValidOrg) {
+      safeSet(() => {
+        setDevices([]);
+        setError("Invalid organisation id");
+        setLoading(false);
+      });
       return;
     }
 
     try {
-      if (!silent) setLoading(true);
-      setError(null);
+      if (!silent) safeSet(() => setLoading(true));
+      safeSet(() => setError(null));
 
-      // ✅ 1) koše/zariadenia cez VIEW (už má bin_id)
       const { data: devData, error: devErr } = await supabase
         .from("bin_full_info")
         .select("bin_id, device_id, device_name, status")
@@ -135,11 +145,10 @@ export default function AdminOrganisationDevicesScreen() {
       const deviceIds = devRows.map((d) => String(d.device_id));
 
       if (deviceIds.length === 0) {
-        setDevices([]);
+        safeSet(() => setDevices([]));
         return;
       }
 
-      // ✅ 2) tanky pre všetky zariadenia naraz
       const { data: tankData, error: tankErr } = await supabase
         .from("tank_status")
         .select("device_id, tank_id, level")
@@ -171,21 +180,28 @@ export default function AdminOrganisationDevicesScreen() {
         };
       });
 
-      setDevices(merged);
+      safeSet(() => setDevices(merged));
     } catch (e: any) {
       const msg =
         e?.code === "42501"
           ? "Nemáš práva čítať dáta (RLS)."
           : e?.message || t("errorLoadingDevices");
-      setError(msg);
-      setDevices([]);
+      safeSet(() => {
+        setError(msg);
+        setDevices([]);
+      });
     } finally {
-      if (!silent) setLoading(false);
+      if (!silent) safeSet(() => setLoading(false));
     }
   };
 
   useEffect(() => {
-    fetchDevices();
+    if (isValidOrg) fetchDevices();
+    else {
+      setLoading(false);
+      setDevices([]);
+      setError("Invalid organisation id");
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idOrgStr]);
 
@@ -201,240 +217,112 @@ export default function AdminOrganisationDevicesScreen() {
     setRefreshing(false);
   };
 
-  const openModal = (item: DeviceItem) => {
-    setSelected(item);
-    setEditName(item.device_name);
-    setModalOpen(true);
-  };
-
-  const closeModal = () => {
-    if (busy) return;
-    setModalOpen(false);
-    setSelected(null);
-    setEditName("");
-  };
-
-  const saveEdit = async () => {
-    if (!selected) return;
-
-    const newName = editName.trim();
-    if (!newName) {
-      Alert.alert("Chyba", "Názov zariadenia nemôže byť prázdny.");
-      return;
-    }
-
-    try {
-      setBusy(true);
-
-      // devices.name podľa tvojej DB
-      const { error: updErr } = await supabase
-        .from("devices")
-        .update({ name: newName })
-        .eq("id", selected.device_id);
-
-      if (updErr) throw updErr;
-
-      closeModal();
-      await fetchDevices({ silent: true });
-    } catch (e: any) {
-      Alert.alert("Chyba", e?.message ?? "Nepodarilo sa uložiť zmeny.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const deleteBin = async () => {
-    if (!selected) return;
-
-    Alert.alert(
-      "Odobrať kôš",
-      "Naozaj chceš odstrániť tento kôš? (Vymaže sa riadok z tabuľky bin.)",
-      [
-        { text: "Zrušiť", style: "cancel" },
-        {
-          text: "Odobrať",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setBusy(true);
-
-              // ✅ správne: delete podľa bin.id
-              const { data: deleted, error: delErr } = await supabase
-                .from("bin")
-                .delete()
-                .eq("id", selected.bin_id)
-                .select("id");
-
-              if (delErr) throw delErr;
-
-              const deletedCount = deleted?.length ?? 0;
-              if (deletedCount === 0) {
-                Alert.alert(
-                  "Nezmazalo sa nič",
-                  "Delete vrátil 0 riadkov. Skontroluj RLS policy na bin.",
-                );
-                return;
-              }
-
-              closeModal();
-              await fetchDevices({ silent: true });
-            } catch (e: any) {
-              Alert.alert(
-                "Chyba",
-                e?.message ?? "Nepodarilo sa vymazať z bin.",
-              );
-            } finally {
-              setBusy(false);
-            }
-          },
-        },
-      ],
-    );
-  };
-
-  if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={ORANGE} />
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={styles.centered}>
-        <Text style={styles.error}>{error}</Text>
-      </View>
-    );
-  }
-
+  // ✅ iba JEDEN Stack.Screen – nehádzaj ho do viacerých branchov
   return (
-    <View style={styles.container}>
+    <View
+      style={
+        loading || error || !isValidOrg ? styles.centered : styles.container
+      }
+    >
       <Stack.Screen
         options={{
           title: orgName || "Organizácia",
           headerBackTitle: "Späť",
+          animation: "none",
+          gestureEnabled: false,
+
+          // ✅ tieto dva často zmenia timing removalu
+          detachPreviousScreen: false,
+          freezeOnBlur: false,
+
+          headerLeft: () => (
+            <Pressable
+              onPress={goBackSafe}
+              style={{ paddingHorizontal: 12, paddingVertical: 6 }}
+            >
+              <Text style={{ fontWeight: "900" }}>{"‹"}</Text>
+            </Pressable>
+          ),
         }}
       />
 
-      <TextInput
-        placeholder={t("searchDevice")}
-        value={search}
-        onChangeText={setSearch}
-        style={styles.searchInput}
-        placeholderTextColor="#999"
-      />
-
-      <Text style={styles.header}>{orgName || `ID: ${idOrg}`}</Text>
-
-      <FlatList
-        data={filteredDevices}
-        keyExtractor={(i) => `${i.bin_id}-${i.device_id}`}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-        contentContainerStyle={{ paddingBottom: vh(3) }}
-        renderItem={({ item }) => (
-          <Pressable style={styles.card} onPress={() => openModal(item)}>
-            <Text style={styles.deviceName}>{item.device_name}</Text>
-            <Text style={styles.statusText}>
-              {t("statusLabel")}: {item.status}
-            </Text>
-
-            <View style={styles.progressRow}>
-              {normalizeTanks(item.tanks).map((tank) => {
-                const fill = clampPercent(tank.level);
-                return (
-                  <View key={tank.tank_id} style={styles.progressItem}>
-                    <AnimatedCircularProgress
-                      size={circleSize}
-                      width={circleWidth}
-                      fill={fill}
-                      tintColor={TANK_COLORS[tank.tank_id] ?? ORANGE}
-                      backgroundColor="#FFE5B4"
-                    >
-                      {() => <Text style={{ fontSize: fs(12) }}>{fill}%</Text>}
-                    </AnimatedCircularProgress>
-
-                    <Text style={styles.tankLabel}>
-                      {t(TANK_TYPE_KEYS[tank.tank_id] ?? "tankMixed")}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
+      {!isValidOrg ? (
+        <>
+          <Text style={styles.error}>Neplatné ID organizácie.</Text>
+          <Pressable onPress={goBackSafe} style={styles.retryBtn}>
+            <Text style={styles.retryBtnText}>Späť na zoznam</Text>
           </Pressable>
-        )}
-        ListEmptyComponent={
-          <View style={{ paddingTop: 40, alignItems: "center" }}>
-            <Text style={{ color: "#777", fontWeight: "600" }}>
-              Žiadne zariadenia
-            </Text>
-          </View>
-        }
-      />
+        </>
+      ) : loading ? (
+        <ActivityIndicator size="large" color={ORANGE} />
+      ) : error ? (
+        <>
+          <Text style={styles.error}>{error}</Text>
+          <Pressable onPress={() => fetchDevices()} style={styles.retryBtn}>
+            <Text style={styles.retryBtnText}>Skúsiť znova</Text>
+          </Pressable>
+        </>
+      ) : (
+        <>
+          <TextInput
+            placeholder={t("searchDevice")}
+            value={search}
+            onChangeText={setSearch}
+            style={styles.searchInput}
+            placeholderTextColor="#999"
+          />
 
-      {/* ✅ MODAL */}
-      <Modal
-        visible={modalOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={closeModal}
-      >
-        <Pressable style={styles.modalOverlay} onPress={closeModal}>
-          <Pressable style={styles.modalCard} onPress={() => {}}>
-            <Text style={styles.modalTitle}>Kôš / zariadenie</Text>
+          <Text style={styles.header}>{orgName || `ID: ${idOrg}`}</Text>
 
-            <Text style={styles.modalLabel}>Názov zariadenia</Text>
-            <TextInput
-              value={editName}
-              onChangeText={setEditName}
-              style={styles.modalInput}
-              editable={!busy}
-              placeholder="Názov"
-              placeholderTextColor="#999"
-            />
-
-            <View style={styles.modalRow}>
-              <Pressable
-                style={[
-                  styles.modalBtn,
-                  styles.modalBtnGhost,
-                  busy && { opacity: 0.6 },
-                ]}
-                onPress={closeModal}
-                disabled={busy}
-              >
-                <Text style={styles.modalBtnGhostText}>Zrušiť</Text>
-              </Pressable>
-
-              <Pressable
-                style={[
-                  styles.modalBtn,
-                  styles.modalBtnPrimary,
-                  busy && { opacity: 0.6 },
-                ]}
-                onPress={saveEdit}
-                disabled={busy}
-              >
-                <Text style={styles.modalBtnPrimaryText}>
-                  {busy ? "Ukladám..." : "Uložiť"}
+          <FlatList
+            data={filteredDevices}
+            keyExtractor={(i) => `${i.bin_id}-${i.device_id}`}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            }
+            contentContainerStyle={{ paddingBottom: vh(3) }}
+            renderItem={({ item }) => (
+              <Pressable style={styles.card}>
+                <Text style={styles.deviceName}>{item.device_name}</Text>
+                <Text style={styles.statusText}>
+                  {t("statusLabel")}: {item.status}
                 </Text>
-              </Pressable>
-            </View>
 
-            <Pressable
-              style={[styles.modalDanger, busy && { opacity: 0.6 }]}
-              onPress={deleteBin}
-              disabled={busy}
-            >
-              <Text style={styles.modalDangerText}>
-                Odobrať kôš z organizácie
-              </Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+                <View style={styles.progressRow}>
+                  {normalizeTanks(item.tanks).map((tank) => {
+                    const fill = clampPercent(tank.level);
+                    const color = TANK_COLORS[tank.tank_id] ?? ORANGE;
+
+                    return (
+                      <View key={tank.tank_id} style={styles.progressItem}>
+                        <Text style={styles.percentText}>{fill}%</Text>
+                        <View style={styles.barTrack}>
+                          <View
+                            style={[
+                              styles.barFill,
+                              { width: `${fill}%`, backgroundColor: color },
+                            ]}
+                          />
+                        </View>
+                        <Text style={styles.tankLabel}>
+                          {t(TANK_TYPE_KEYS[tank.tank_id] ?? "tankMixed")}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              </Pressable>
+            )}
+            ListEmptyComponent={
+              <View style={{ paddingTop: 40, alignItems: "center" }}>
+                <Text style={{ color: "#777", fontWeight: "600" }}>
+                  Žiadne zariadenia
+                </Text>
+              </View>
+            }
+          />
+        </>
+      )}
     </View>
   );
 }
@@ -454,6 +342,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
 
+  retryBtn: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "#111",
+  },
+  retryBtnText: { color: "#fff", fontWeight: "900" },
+
   searchInput: {
     height: vh(6),
     borderRadius: vw(2),
@@ -463,13 +360,14 @@ const styles = StyleSheet.create({
     fontSize: fs(16),
     backgroundColor: "#F6F6F6",
     marginBottom: vh(1.5),
+    width: "100%",
   },
 
   header: {
     fontSize: fs(18),
     fontWeight: "bold",
     color: "#000",
-    opacity: 0.6,
+    opacity: 0.5,
     marginBottom: vh(1),
   },
 
@@ -495,84 +393,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
+  percentText: {
+    fontSize: fs(12),
+    fontWeight: "900",
+    marginBottom: vh(0.4),
+  },
+
+  barTrack: {
+    width: "100%",
+    height: vh(1.1),
+    borderRadius: vw(2),
+    backgroundColor: "#FFE5B4",
+    overflow: "hidden",
+  },
+
+  barFill: {
+    height: "100%",
+    borderRadius: vw(2),
+  },
+
   tankLabel: {
     marginTop: vh(0.5),
     fontSize: fs(11),
     textAlign: "center",
-  },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
-    justifyContent: "center",
-    paddingHorizontal: 18,
-  },
-  modalCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#EAEAEA",
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "900",
-    marginBottom: 12,
-    color: "#111",
-  },
-  modalLabel: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#333",
-    marginBottom: 6,
-  },
-  modalInput: {
-    height: 46,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E2E2E2",
-    paddingHorizontal: 12,
-    fontSize: 15,
-    backgroundColor: "#F6F6F6",
-  },
-  modalRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 14,
-  },
-  modalBtn: {
-    flex: 1,
-    height: 46,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalBtnGhost: {
-    borderWidth: 1,
-    borderColor: "#DADADA",
-    backgroundColor: "#fff",
-  },
-  modalBtnGhostText: {
-    fontWeight: "900",
-    color: "#111",
-  },
-  modalBtnPrimary: {
-    backgroundColor: ORANGE,
-  },
-  modalBtnPrimaryText: {
-    fontWeight: "900",
-    color: "#fff",
-  },
-  modalDanger: {
-    height: 46,
-    borderRadius: 12,
-    backgroundColor: "#EF4444",
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 12,
-  },
-  modalDangerText: {
-    color: "#fff",
-    fontWeight: "900",
   },
 });

@@ -3,20 +3,12 @@ import { Link, Stack } from "expo-router";
 import React from "react";
 import { Dimensions, Image, Pressable, StyleSheet, View } from "react-native";
 
-/* =====================
-   Responsive helpers
-===================== */
 const { width } = Dimensions.get("window");
-
 const clamp = (n: number, min: number, max: number) =>
   Math.max(min, Math.min(max, n));
-
 const scale = (base: number) =>
   clamp((base * width) / 375, base * 0.85, base * 1.25);
 
-/* =====================
-   Layout
-===================== */
 export default function AdminMenuLayout() {
   return (
     <Stack
@@ -25,24 +17,36 @@ export default function AdminMenuLayout() {
         headerShadowVisible: false,
         headerStyle: { backgroundColor: "#fff" },
 
-        headerLeft: () => <HeaderLogo />,
+        // ✅ headerRight môže byť globálne
         headerRight: () => <HeaderMenuButton />,
 
-        headerLeftContainerStyle: { paddingLeft: scale(12) },
         headerRightContainerStyle: { paddingRight: scale(12) },
       }}
     >
-      <Stack.Screen name="index" />
+      {/* ✅ len tu daj logo namiesto back buttonu */}
+      <Stack.Screen
+        name="index"
+        options={{
+          headerLeft: () => <HeaderLogo />,
+          headerLeftContainerStyle: { paddingLeft: scale(12) },
+        }}
+      />
+
+      {/* ostatné nech používajú default back */}
       <Stack.Screen name="items" />
       <Stack.Screen name="settings" />
-      {/* <Stack.Screen name="[id]" /> */}
+      <Stack.Screen name="addDevice" />
+      <Stack.Screen name="addOrganisation" />
+
+      {/* ✅ organisation routy sú children - musíš uviesť presné mená */}
+      <Stack.Screen name="organisation/index" />
+      <Stack.Screen name="organisation/items" />
+      <Stack.Screen name="organisation/settings" />
+      <Stack.Screen name="organisation/[id_org]" />
     </Stack>
   );
 }
 
-/* =====================
-   Header components
-===================== */
 function HeaderLogo() {
   return (
     <View style={styles.headerItem}>
@@ -67,9 +71,6 @@ function HeaderMenuButton() {
   );
 }
 
-/* =====================
-   Styles
-===================== */
 const styles = StyleSheet.create({
   headerItem: {
     height: scale(40),
@@ -77,18 +78,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: scale(8),
   },
-
   logo: {
     width: scale(44),
     height: scale(44),
     resizeMode: "contain",
   },
-
   burger: {
     height: scale(14),
     justifyContent: "space-between",
   },
-
   burgerLine: {
     width: scale(24),
     height: scale(4),
