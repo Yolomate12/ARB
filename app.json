@@ -7,24 +7,32 @@
     "scheme": "arb",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+
     "icon": "./assets/images/adaptiveLogo.png",
+
     "splash": {
       "image": "./assets/images/adaptiveLogo.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+
     "androidStatusBar": {
       "backgroundColor": "#ffffff",
       "barStyle": "dark-content",
       "translucent": false
     },
+
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.sebik.arp",
+      "config": {
+        "googleMapsApiKey": "AIzaSyARSqMiaHf1-g4vGhvXm4vJ_Y7GFVRVlTo"
+      },
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
     },
+
     "android": {
       "package": "com.sebik.arp",
       "adaptiveIcon": {
@@ -39,16 +47,21 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
-    "plugins": ["expo-router", "expo-secure-store"],
-    "experiments": {
-      "typedRoutes": true,
-      "tsconfigPaths": true
-    },
+
     "extra": {
+      "GOOGLE_MAPS_API_KEY": "AIzaSyARSqMiaHf1-g4vGhvXm4vJ_Y7GFVRVlTo",
       "eas": {
         "projectId": "1ef225cf-c041-44cb-a832-7d41df3a7d23"
       }
     },
+
+    "plugins": ["expo-router", "expo-secure-store"],
+
+    "experiments": {
+      "typedRoutes": true,
+      "tsconfigPaths": true
+    },
+
     "owner": "sebik"
   }
 }

@@ -1,10 +1,11 @@
 import Colors from "@/constants/Colors";
 import { supabase } from "@/lib/supabase";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  BackHandler,
   FlatList,
   Pressable,
   RefreshControl,
@@ -26,6 +27,9 @@ type OrgRow = {
 const ORANGE = Colors.orange?.background ?? "#F7941D";
 const STICKY_THRESHOLD = 4;
 
+// nastav si sem, kam má "Back" z adminu viesť (admin root)
+const ADMIN_ROOT_ROUTE = "/(admin)/menu/items";
+
 export default function AdminOrganizationsScreen() {
   const router = useRouter();
 
@@ -34,7 +38,7 @@ export default function AdminOrganizationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState("");
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
 
     const { data, error } = await supabase
@@ -50,17 +54,17 @@ export default function AdminOrganizationsScreen() {
     }
 
     setLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
-  const onRefresh = async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await load();
     setRefreshing(false);
-  };
+  }, [load]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -76,6 +80,25 @@ export default function AdminOrganizationsScreen() {
   }, [rows, search]);
 
   const sticky = filtered.length >= STICKY_THRESHOLD;
+
+  // ✅ zabráni tomu, aby "back" z adminu spadol do user stacku
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        // Admin list je braná ako root. Namiesto "goBack" spravíme replace na admin root.
+        router.replace(ADMIN_ROOT_ROUTE);
+        return true;
+      };
+
+      // Android hardware back
+      const sub = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress,
+      );
+
+      return () => sub.remove();
+    }, [router]),
+  );
 
   const Buttons = (
     <>
@@ -114,6 +137,9 @@ export default function AdminOrganizationsScreen() {
           value={search}
           onChangeText={setSearch}
           style={styles.searchInput}
+          autoCorrect={false}
+          autoCapitalize="none"
+          returnKeyType="search"
         />
         <FontAwesome name="search" size={18} color="#111" />
       </View>

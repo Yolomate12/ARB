@@ -2,7 +2,7 @@ import Colors from "@/constants/Colors";
 import { supabase } from "@/lib/supabase";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -18,6 +18,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { GooglePlacesAutocomplete } from "react-native-google-places-autocomplete";
 import MapView, { MapPressEvent, Marker } from "react-native-maps";
 
 const ORANGE = Colors.orange?.background ?? "#F7941D";
@@ -39,6 +40,7 @@ type CountryRow = {
 
 export default function NewOrganisationScreen() {
   const router = useRouter();
+  const mapRef = useRef<MapView | null>(null);
 
   // form
   const [orgName, setOrgName] = useState("");
@@ -224,6 +226,8 @@ export default function NewOrganisationScreen() {
   const selectedCountryLabel = selectedCountry
     ? `${selectedCountry.country_name} (${selectedCountry.iso2})`
     : "Vyber krajinu";
+
+  const placesApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
 
   return (
     <KeyboardAvoidingView
@@ -450,7 +454,53 @@ export default function NewOrganisationScreen() {
       >
         <View style={styles.mapContainer}>
           <View style={styles.mapTopBar}>
-            <Text style={styles.mapTitle}>Vyber polohu</Text>
+            <View style={{ flex: 1, marginRight: 10, zIndex: 10 }}>
+              {placesApiKey ? (
+                <GooglePlacesAutocomplete
+                  placeholder="Hľadať miesto / adresu"
+                  fetchDetails
+                  enablePoweredByContainer={false}
+                  query={{
+                    key: placesApiKey,
+                    language: "sk",
+                    // components: "country:sk",
+                  }}
+                  styles={{
+                    container: { flex: 1 },
+                    textInput: styles.mapSearchInput,
+                    listView: styles.mapSearchList,
+                  }}
+                  onPress={(data, details) => {
+                    const loc = details?.geometry?.location;
+                    if (!loc) return;
+
+                    const latitude = loc.lat;
+                    const longitude = loc.lng;
+
+                    setLat(String(latitude));
+                    setLng(String(longitude));
+
+                    mapRef.current?.animateToRegion(
+                      {
+                        latitude,
+                        longitude,
+                        latitudeDelta: 0.02,
+                        longitudeDelta: 0.02,
+                      },
+                      350,
+                    );
+                  }}
+                />
+              ) : (
+                <View style={styles.mapSearchFallback}>
+                  <Text style={styles.mapSearchFallbackText}>
+                    Chýba EXPO_PUBLIC_GOOGLE_MAPS_API_KEY (Places search je
+                    vypnutý).
+                  </Text>
+                </View>
+              )}
+            </View>
+
             <Pressable
               onPress={() => setMapOpen(false)}
               style={styles.mapClose}
@@ -460,6 +510,7 @@ export default function NewOrganisationScreen() {
           </View>
 
           <MapView
+            ref={(r) => (mapRef.current = r)}
             style={styles.map}
             initialRegion={initialRegion}
             onPress={onPickOnMap}
@@ -650,11 +701,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
     borderBottomWidth: 1,
     borderBottomColor: "#EFEFEF",
+    gap: 10,
+    zIndex: 20,
   },
+
+  mapSearchInput: {
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E6E6E6",
+    paddingHorizontal: 12,
+    fontSize: 15,
+    color: "#111",
+    backgroundColor: "#fff",
+  },
+  mapSearchList: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E6E6E6",
+    marginTop: 8,
+  },
+  mapSearchFallback: {
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E6E6E6",
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff",
+  },
+  mapSearchFallbackText: { fontSize: 12, color: "#666", fontWeight: "700" },
+
   mapTitle: { fontSize: 18, fontWeight: "900", color: "#111" },
   mapClose: {
     backgroundColor: ORANGE,
