@@ -1,19 +1,20 @@
 import { supabase } from "@/lib/supabase";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Pressable,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 
 type Option = { label: string; value: string };
@@ -26,6 +27,13 @@ type AvailableDeviceRow = {
 type OrganisationRow = {
   id: number;
   nazov_org: string | null;
+};
+
+type CountryRow = {
+  id: number;
+  country_name: string;
+  iso2: string;
+  iso3: string;
 };
 
 function ChevronDown({ color = "#8A8A8A" }: { color?: string }) {
@@ -117,37 +125,62 @@ export default function NewDeviceScreen() {
   const [loadingDevices, setLoadingDevices] = useState(true);
   const [loadingOrgs, setLoadingOrgs] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
 
+  // devices
   const [deviceOptions, setDeviceOptions] = useState<Option[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<Option | null>(null);
 
+  // orgs
   const [orgOptions, setOrgOptions] = useState<Option[]>([]);
   const [selectedOrg, setSelectedOrg] = useState<Option | null>(null);
 
+  // address
   const [street, setStreet] = useState("");
   const [city, setCity] = useState("");
-  const [country, setCountry] = useState("");
+
+  // countries dropdown
+  const [countries, setCountries] = useState<CountryRow[]>([]);
+  const [countriesLoading, setCountriesLoading] = useState(true);
+  const [countriesRefreshing, setCountriesRefreshing] = useState(false);
+  const [countryOpen, setCountryOpen] = useState(false);
+  const [countrySearch, setCountrySearch] = useState("");
+  const [selectedCountry, setSelectedCountry] = useState<CountryRow | null>(
+    null,
+  );
+
+  const filteredCountries = useMemo(() => {
+    const q = countrySearch.trim().toLowerCase();
+    if (!q) return countries;
+
+    return countries.filter((c) => {
+      const hay = `${c.country_name} ${c.iso2} ${c.iso3}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [countries, countrySearch]);
 
   const canSubmit = useMemo(() => {
     return (
       !!selectedOrg &&
       !!selectedDevice &&
+      !!selectedCountry &&
       street.trim().length > 0 &&
       city.trim().length > 0 &&
-      country.trim().length > 0 &&
       !loadingDevices &&
       !loadingOrgs &&
+      !countriesLoading &&
       !submitting
     );
   }, [
     selectedOrg,
     selectedDevice,
+    selectedCountry,
     street,
     city,
-    country,
     loadingDevices,
     loadingOrgs,
+    countriesLoading,
     submitting,
   ]);
 
@@ -172,12 +205,8 @@ export default function NewDeviceScreen() {
 
       setDeviceOptions(opts);
 
-      if (
-        selectedDevice &&
-        !opts.some((o) => o.value === selectedDevice.value)
-      ) {
+      if (selectedDevice && !opts.some((o) => o.value === selectedDevice.value))
         setSelectedDevice(null);
-      }
     } catch (e: any) {
       setError(e?.message ?? "Nepodarilo sa načítať dostupné zariadenia.");
     } finally {
@@ -185,8 +214,6 @@ export default function NewDeviceScreen() {
     }
   }
 
-  // DÔLEŽITÉ: Toto musíš napojiť na view/policy, aby si videl len orgy, ktoré smieš.
-  // Zatiaľ to ťahá z organisation priamo.
   async function loadOrganisations() {
     setLoadingOrgs(true);
     setError(null);
@@ -208,9 +235,8 @@ export default function NewDeviceScreen() {
 
       setOrgOptions(opts);
 
-      if (selectedOrg && !opts.some((o) => o.value === selectedOrg.value)) {
+      if (selectedOrg && !opts.some((o) => o.value === selectedOrg.value))
         setSelectedOrg(null);
-      }
     } catch (e: any) {
       setError(e?.message ?? "Nepodarilo sa načítať organizácie.");
     } finally {
@@ -218,8 +244,35 @@ export default function NewDeviceScreen() {
     }
   }
 
+  async function loadCountries() {
+    setCountriesLoading(true);
+    setError(null);
+
+    try {
+      const { data, error: cErr } = await supabase
+        .from("country")
+        .select("id,country_name,iso2,iso3")
+        .order("country_name", { ascending: true });
+
+      if (cErr) throw cErr;
+
+      setCountries((data ?? []) as CountryRow[]);
+    } catch (e: any) {
+      setError(e?.message ?? "Nepodarilo sa načítať krajiny (policy/RLS?).");
+      setCountries([]);
+    } finally {
+      setCountriesLoading(false);
+    }
+  }
+
+  async function refreshCountries() {
+    setCountriesRefreshing(true);
+    await loadCountries();
+    setCountriesRefreshing(false);
+  }
+
   async function handleSubmit() {
-    if (!selectedDevice || !selectedOrg) return;
+    if (!selectedDevice || !selectedOrg || !selectedCountry) return;
 
     const p_device_id = selectedDevice.value;
     const p_org_id = Number(selectedOrg.value);
@@ -229,7 +282,7 @@ export default function NewDeviceScreen() {
       return;
     }
 
-    const p_country_name = country.trim();
+    const p_country_name = selectedCountry.country_name;
     const p_city_name = city.trim();
     const p_street = street.trim();
 
@@ -252,11 +305,14 @@ export default function NewDeviceScreen() {
 
       const binId = data as number;
 
+      // reset form
       setSelectedDevice(null);
       setStreet("");
       setCity("");
-      setCountry("");
+      setSelectedCountry(null);
+      setCountrySearch("");
 
+      // refresh available devices (to reflect that device got assigned)
       await loadAvailableDevices();
 
       Alert.alert("Hotovo", `Kontajner bol pridaný (bin id: ${binId}).`);
@@ -266,16 +322,14 @@ export default function NewDeviceScreen() {
       let friendly = raw;
       if (typeof raw === "string") {
         const lower = raw.toLowerCase();
-        if (lower.includes("not allowed"))
-          friendly = "Nemáš právo zapisovať do tejto organizácie.";
-        if (lower.includes("different organisation"))
-          friendly = "Zariadenie patrí do inej organizácie.";
         if (lower.includes("already assigned")) {
-          friendly = "Toto zariadenie už niekto priradil.";
+          friendly = "Toto zariadenie už je priradené v inom kontajneri.";
           await loadAvailableDevices();
-        }
-        if (lower.includes("row-level security"))
+        } else if (lower.includes("country not found")) {
+          friendly = "Krajina nebola nájdená v DB (country_name mismatch).";
+        } else if (lower.includes("row-level security")) {
           friendly = "Nemáš práva na vytvorenie záznamu (RLS).";
+        }
       }
 
       setError(friendly);
@@ -287,8 +341,13 @@ export default function NewDeviceScreen() {
   useEffect(() => {
     loadOrganisations();
     loadAvailableDevices();
+    loadCountries();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const countryLabel = selectedCountry
+    ? `${selectedCountry.country_name} (${selectedCountry.iso2})`
+    : "Vybrať krajinu";
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -305,7 +364,7 @@ export default function NewDeviceScreen() {
           {error ? (
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>{error}</Text>
-              <View style={{ flexDirection: "row", gap: 10 }}>
+              <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
                 <Pressable style={styles.smallBtn} onPress={loadOrganisations}>
                   <Text style={styles.smallBtnText}>Orgy</Text>
                 </Pressable>
@@ -314,6 +373,9 @@ export default function NewDeviceScreen() {
                   onPress={loadAvailableDevices}
                 >
                   <Text style={styles.smallBtnText}>Zariadenia</Text>
+                </Pressable>
+                <Pressable style={styles.smallBtn} onPress={loadCountries}>
+                  <Text style={styles.smallBtnText}>Krajiny</Text>
                 </Pressable>
               </View>
             </View>
@@ -357,13 +419,91 @@ export default function NewDeviceScreen() {
             style={styles.input}
           />
 
-          <TextInput
-            value={country}
-            onChangeText={setCountry}
-            placeholder="Krajina"
-            placeholderTextColor="#9AA0A6"
-            style={styles.input}
-          />
+          {/* country dropdown */}
+          <Pressable
+            style={[styles.select, countriesLoading && { opacity: 0.7 }]}
+            onPress={() => !countriesLoading && setCountryOpen(true)}
+          >
+            <Text
+              style={[
+                styles.selectText,
+                !selectedCountry && styles.placeholderText,
+              ]}
+              numberOfLines={1}
+            >
+              {countriesLoading ? "Načítavam..." : countryLabel}
+            </Text>
+            {countriesLoading ? <ActivityIndicator /> : <ChevronDown />}
+          </Pressable>
+
+          <Modal
+            visible={countryOpen}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setCountryOpen(false)}
+          >
+            <Pressable
+              style={styles.modalBackdrop}
+              onPress={() => setCountryOpen(false)}
+            >
+              <Pressable
+                style={styles.modalCard}
+                onPress={(e) => e.stopPropagation()}
+              >
+                <Text style={styles.modalTitle}>Vyber krajinu</Text>
+
+                <View style={styles.searchBox}>
+                  <TextInput
+                    value={countrySearch}
+                    onChangeText={setCountrySearch}
+                    placeholder="Hľadať (názov, ISO2, ISO3)"
+                    placeholderTextColor="#9AA0A6"
+                    style={styles.searchInput}
+                  />
+                  <Text style={{ fontSize: 16 }}>🔎</Text>
+                </View>
+
+                {filteredCountries.length === 0 ? (
+                  <View style={{ padding: 12 }}>
+                    <Text style={{ color: "#444" }}>Žiadne položky.</Text>
+                    <Pressable
+                      style={[styles.smallBtn, { marginTop: 12 }]}
+                      onPress={refreshCountries}
+                    >
+                      <Text style={styles.smallBtnText}>Obnoviť</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <FlatList
+                    data={filteredCountries}
+                    keyExtractor={(i) => String(i.id)}
+                    refreshControl={
+                      <RefreshControl
+                        refreshing={countriesRefreshing}
+                        onRefresh={refreshCountries}
+                      />
+                    }
+                    ItemSeparatorComponent={() => (
+                      <View style={styles.modalDivider} />
+                    )}
+                    renderItem={({ item }) => (
+                      <Pressable
+                        style={styles.modalItem}
+                        onPress={() => {
+                          setSelectedCountry(item);
+                          setCountryOpen(false);
+                        }}
+                      >
+                        <Text style={styles.modalItemText}>
+                          {item.country_name} ({item.iso2})
+                        </Text>
+                      </Pressable>
+                    )}
+                  />
+                )}
+              </Pressable>
+            </Pressable>
+          </Modal>
 
           <Pressable
             style={({ pressed }) => [
@@ -488,7 +628,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 12,
     paddingHorizontal: 12,
-    maxHeight: "70%",
+    maxHeight: "75%",
   },
   modalTitle: {
     fontSize: 16,
@@ -500,4 +640,23 @@ const styles = StyleSheet.create({
   modalDivider: { height: 1, backgroundColor: "#EEE" },
   modalItem: { paddingVertical: 14, paddingHorizontal: 10 },
   modalItemText: { fontSize: 16, color: TEXT },
+
+  searchBox: {
+    height: 44,
+    borderWidth: 1.5,
+    borderColor: BORDER,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+    backgroundColor: "#fff",
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: TEXT,
+    marginRight: 8,
+  },
 });

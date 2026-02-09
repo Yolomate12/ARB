@@ -2,14 +2,16 @@ import Colors from "@/constants/Colors";
 import { supabase } from "@/lib/supabase";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -28,22 +30,42 @@ function randomCompanyCode6() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
+type CountryRow = {
+  id: number;
+  country_name: string;
+  iso2: string;
+  iso3: string;
+};
+
 export default function NewOrganisationScreen() {
   const router = useRouter();
 
-  // UI podľa fotky (bez vytvárania účtu)
+  // form
   const [orgName, setOrgName] = useState("");
-  const [shortDesc, setShortDesc] = useState("");
-  const [country, setCountry] = useState("");
+  const [description, setDescription] = useState("");
 
-  // lokácia
+  // HQ address fields (required for RPC)
+  const [city, setCity] = useState("");
+  const [street, setStreet] = useState("");
+
+  // country dropdown
+  const [countries, setCountries] = useState<CountryRow[]>([]);
+  const [countriesLoading, setCountriesLoading] = useState(false);
+  const [countriesRefreshing, setCountriesRefreshing] = useState(false);
+  const [countryOpen, setCountryOpen] = useState(false);
+  const [countrySearch, setCountrySearch] = useState("");
+  const [selectedCountry, setSelectedCountry] = useState<CountryRow | null>(
+    null,
+  );
+
+  // location (optional)
   const [lat, setLat] = useState<string>("");
   const [lng, setLng] = useState<string>("");
 
   // map modal
   const [mapOpen, setMapOpen] = useState(false);
 
-  // company code auto
+  // company code
   const [companyCode, setCompanyCode] = useState<string>("");
 
   const [saving, setSaving] = useState(false);
@@ -59,17 +81,59 @@ export default function NewOrganisationScreen() {
   const canSubmit = useMemo(() => {
     if (!orgName.trim()) return false;
 
-    // coords sú voliteľné – ale ak vyplníš jedno, musí byť aj druhé a číslo
+    // HQ address required
+    if (!selectedCountry) return false;
+    if (!city.trim()) return false;
+    if (!street.trim()) return false;
+
+    // coords optional, but if one is filled, both must be valid numbers
     const anyCoord = lat.trim() || lng.trim();
     if (anyCoord && !coords) return false;
 
     return true;
-  }, [orgName, lat, lng, coords]);
+  }, [orgName, selectedCountry, city, street, lat, lng, coords]);
+
+  const loadCountries = async () => {
+    setCountriesLoading(true);
+
+    const { data, error } = await supabase
+      .from("country")
+      .select("id,country_name,iso2,iso3")
+      .order("country_name", { ascending: true });
+
+    if (error) {
+      console.log("country load error:", error);
+    } else {
+      setCountries((data ?? []) as CountryRow[]);
+    }
+
+    setCountriesLoading(false);
+  };
+
+  useEffect(() => {
+    loadCountries();
+  }, []);
+
+  const onRefreshCountries = async () => {
+    setCountriesRefreshing(true);
+    await loadCountries();
+    setCountriesRefreshing(false);
+  };
+
+  const filteredCountries = useMemo(() => {
+    const q = countrySearch.trim().toLowerCase();
+    if (!q) return countries;
+
+    return countries.filter((c) => {
+      const hay = `${c.country_name} ${c.iso2} ${c.iso3}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [countries, countrySearch]);
 
   const ensureCompanyCode = async () => {
     if (companyCode.trim()) return companyCode.trim();
 
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 8; i++) {
       const code = randomCompanyCode6();
       const { data, error } = await supabase
         .from("organisation")
@@ -77,6 +141,7 @@ export default function NewOrganisationScreen() {
         .eq("company_code", code)
         .limit(1);
 
+      // if uniqueness check fails, don't block the user
       if (error) {
         setCompanyCode(code);
         return code;
@@ -100,10 +165,22 @@ export default function NewOrganisationScreen() {
   };
 
   const submit = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || saving) return;
 
     if (!orgName.trim()) {
       Alert.alert("Chyba", "Zadaj názov organizácie.");
+      return;
+    }
+    if (!selectedCountry) {
+      Alert.alert("Chyba", "Vyber krajinu.");
+      return;
+    }
+    if (!city.trim()) {
+      Alert.alert("Chyba", "Zadaj mesto.");
+      return;
+    }
+    if (!street.trim()) {
+      Alert.alert("Chyba", "Zadaj ulicu (aj číslo).");
       return;
     }
 
@@ -111,46 +188,42 @@ export default function NewOrganisationScreen() {
 
     const code = await ensureCompanyCode();
 
-    const payload = {
-      nazov_org: orgName.trim(),
-      company_code: onlyDigits(code),
-      latitude: coords ? coords.latitude : null,
-      longitude: coords ? coords.longitude : null,
-    };
-
-    // NOTE: shortDesc/country sú len UI. Ak ich chceš ukladať, treba pridať stĺpce do DB.
-    // payload.description = shortDesc.trim() || null
-    // payload.country = country.trim() || null
-
-    const { error } = await supabase
-      .from("organisation")
-      .insert(payload)
-      .select("id")
-      .single();
+    const { data, error } = await supabase.rpc("create_organisation_with_hq", {
+      p_nazov_org: orgName.trim(),
+      p_company_code: onlyDigits(code),
+      p_description: description.trim() || null,
+      p_latitude: coords ? coords.latitude : null,
+      p_longitude: coords ? coords.longitude : null,
+      p_country_id: selectedCountry.id,
+      p_city_name: city.trim(),
+      p_street: street.trim(),
+    });
 
     setSaving(false);
 
     if (error) {
-      console.log("insert organisation error:", error);
+      console.log("rpc create_organisation_with_hq error:", error);
       Alert.alert("Chyba", error.message);
       return;
     }
 
+    const orgId = data as number | null;
+
     Alert.alert(
       "Hotovo",
-      `Organizácia bola vytvorená.\nCompany code: ${code}`,
+      `Organizácia bola vytvorená.\nID: ${orgId ?? "?"}\nCompany code: ${code}`,
       [{ text: "OK", onPress: () => router.back() }],
     );
   };
 
   const initialRegion = useMemo(() => {
     const base = coords ?? { latitude: 48.1486, longitude: 17.1077 };
-    return {
-      ...base,
-      latitudeDelta: 0.08,
-      longitudeDelta: 0.08,
-    };
+    return { ...base, latitudeDelta: 0.08, longitudeDelta: 0.08 };
   }, [coords]);
+
+  const selectedCountryLabel = selectedCountry
+    ? `${selectedCountry.country_name} (${selectedCountry.iso2})`
+    : "Vyber krajinu";
 
   return (
     <KeyboardAvoidingView
@@ -164,7 +237,6 @@ export default function NewOrganisationScreen() {
         <Text style={styles.title}>Nová organizácia</Text>
 
         <Text style={styles.sectionLabel}>Názov organizácie</Text>
-
         <TextInput
           value={orgName}
           onChangeText={setOrgName}
@@ -173,24 +245,55 @@ export default function NewOrganisationScreen() {
           style={styles.input}
         />
 
+        <Text style={styles.sectionLabel}>Popis</Text>
         <TextInput
-          value={shortDesc}
-          onChangeText={setShortDesc}
+          value={description}
+          onChangeText={setDescription}
           placeholder="Stručný popis"
+          placeholderTextColor="#A8A8A8"
+          style={[styles.input, styles.textArea]}
+          multiline
+        />
+
+        <Text style={styles.sectionLabel}>Krajina (sídlo)</Text>
+        <Pressable
+          style={[styles.input, styles.dropdownInput]}
+          onPress={() => setCountryOpen(true)}
+        >
+          <Text
+            style={{
+              fontSize: 16,
+              color: selectedCountry ? "#111" : "#A8A8A8",
+              fontWeight: "700",
+              flex: 1,
+            }}
+            numberOfLines={1}
+          >
+            {selectedCountryLabel}
+          </Text>
+          <FontAwesome name="chevron-down" size={16} color="#999" />
+        </Pressable>
+
+        <Text style={styles.sectionLabel}>Mesto (sídlo)</Text>
+        <TextInput
+          value={city}
+          onChangeText={setCity}
+          placeholder="Napr. Prešov"
           placeholderTextColor="#A8A8A8"
           style={styles.input}
         />
 
+        <Text style={styles.sectionLabel}>Ulica + číslo (sídlo)</Text>
         <TextInput
-          value={country}
-          onChangeText={setCountry}
-          placeholder="Krajina"
+          value={street}
+          onChangeText={setStreet}
+          placeholder="Napr. Hlavná 12"
           placeholderTextColor="#A8A8A8"
           style={styles.input}
         />
 
         <View style={styles.coordsHeader}>
-          <Text style={styles.sectionLabel}>Súradnice</Text>
+          <Text style={styles.sectionLabel}>Súradnice (voliteľné)</Text>
 
           <Pressable style={styles.mapBtn} onPress={() => setMapOpen(true)}>
             <FontAwesome name="map" size={16} color={ORANGE} />
@@ -252,6 +355,92 @@ export default function NewOrganisationScreen() {
           <Text style={styles.cancelText}>Zrušiť</Text>
         </Pressable>
       </ScrollView>
+
+      {/* COUNTRY MODAL */}
+      <Modal
+        visible={countryOpen}
+        animationType="slide"
+        onRequestClose={() => setCountryOpen(false)}
+      >
+        <View style={styles.modalWrap}>
+          <View style={styles.modalTopBar}>
+            <Text style={styles.modalTitle}>Vyber krajinu</Text>
+            <Pressable
+              onPress={() => setCountryOpen(false)}
+              style={styles.modalClose}
+            >
+              <Text style={styles.modalCloseText}>Hotovo</Text>
+            </Pressable>
+          </View>
+
+          <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+            <View style={styles.searchBox}>
+              <TextInput
+                value={countrySearch}
+                onChangeText={setCountrySearch}
+                placeholder="Hľadať (názov, ISO2, ISO3)"
+                placeholderTextColor="#A8A8A8"
+                style={styles.searchInput}
+              />
+              <FontAwesome name="search" size={18} color="#111" />
+            </View>
+          </View>
+
+          {countriesLoading ? (
+            <View style={styles.center}>
+              <ActivityIndicator size="large" color={ORANGE} />
+            </View>
+          ) : (
+            <FlatList
+              data={filteredCountries}
+              keyExtractor={(item) => String(item.id)}
+              refreshControl={
+                <RefreshControl
+                  refreshing={countriesRefreshing}
+                  onRefresh={onRefreshCountries}
+                />
+              }
+              contentContainerStyle={{ padding: 16, paddingTop: 12 }}
+              ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+              ListEmptyComponent={
+                <View style={{ paddingTop: 40, alignItems: "center" }}>
+                  <Text style={{ color: "#777", fontWeight: "700" }}>
+                    Žiadne výsledky
+                  </Text>
+                </View>
+              }
+              renderItem={({ item }) => {
+                const selected = selectedCountry?.id === item.id;
+                return (
+                  <Pressable
+                    style={[
+                      styles.countryRow,
+                      selected && { borderColor: ORANGE, borderWidth: 2 },
+                    ]}
+                    onPress={() => {
+                      setSelectedCountry(item);
+                      setCountryOpen(false);
+                      setCountrySearch("");
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.countryName} numberOfLines={1}>
+                        {item.country_name}
+                      </Text>
+                      <Text style={styles.countryIso}>
+                        {item.iso2} · {item.iso3}
+                      </Text>
+                    </View>
+                    {selected && (
+                      <FontAwesome name="check" size={18} color={ORANGE} />
+                    )}
+                  </Pressable>
+                );
+              }}
+            />
+          )}
+        </View>
+      </Modal>
 
       {/* MAP MODAL */}
       <Modal
@@ -322,15 +511,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#111",
     marginBottom: 12,
+    justifyContent: "center",
   },
 
-  row: {
+  textArea: {
+    height: 92,
+    paddingTop: 14,
+    textAlignVertical: "top",
+  },
+
+  dropdownInput: {
     flexDirection: "row",
+    alignItems: "center",
     gap: 12,
   },
-  half: {
-    flex: 1,
-  },
+
+  row: { flexDirection: "row", gap: 12 },
+  half: { flex: 1 },
 
   coordsHeader: {
     flexDirection: "row",
@@ -357,10 +554,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
 
-  codeRow: {
-    marginTop: 6,
-    marginBottom: 6,
-  },
+  codeRow: { marginTop: 6, marginBottom: 6 },
   codeLabel: {
     fontSize: 13,
     fontWeight: "800",
@@ -377,10 +571,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 14,
   },
-  codePillText: {
-    fontWeight: "900",
-    color: "#333",
-  },
+  codePillText: { fontWeight: "900", color: "#333" },
 
   submitBtn: {
     height: 62,
@@ -390,23 +581,69 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginTop: 18,
   },
-  submitText: {
-    color: "#fff",
-    fontSize: 17,
-    fontWeight: "900",
-  },
+  submitText: { color: "#fff", fontSize: 17, fontWeight: "900" },
 
-  cancelLink: {
-    alignSelf: "center",
-    marginTop: 14,
+  cancelLink: { alignSelf: "center", marginTop: 14, paddingVertical: 10 },
+  cancelText: { color: "#666", fontWeight: "800" },
+
+  // modal
+  modalWrap: { flex: 1, backgroundColor: "#fff" },
+  modalTopBar: {
+    paddingTop: Platform.OS === "ios" ? 56 : 18,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderBottomWidth: 1,
+    borderBottomColor: "#EFEFEF",
+  },
+  modalTitle: { fontSize: 18, fontWeight: "900", color: "#111" },
+  modalClose: {
+    backgroundColor: ORANGE,
+    borderRadius: 12,
+    paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  cancelText: {
-    color: "#666",
-    fontWeight: "800",
+  modalCloseText: { color: "#fff", fontWeight: "900" },
+
+  searchBox: {
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#E6E6E6",
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#fff",
+    marginBottom: 10,
+  },
+  searchInput: {
+    flex: 1,
+    marginRight: 10,
+    fontSize: 15,
+    color: "#111",
   },
 
-  // MAP
+  countryRow: {
+    minHeight: 62,
+    borderRadius: 16,
+    backgroundColor: "#F6F7FB",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderColor: "#F6F7FB",
+  },
+  countryName: { fontSize: 16, fontWeight: "900", color: "#111" },
+  countryIso: { fontSize: 13, fontWeight: "800", color: "#666", marginTop: 3 },
+
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+
+  // map
   mapContainer: { flex: 1, backgroundColor: "#fff" },
   mapTopBar: {
     paddingTop: Platform.OS === "ios" ? 56 : 18,
