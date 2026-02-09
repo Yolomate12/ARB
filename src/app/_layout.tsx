@@ -1,6 +1,5 @@
-import "react-native-reanimated"; // nechaj úplne prvé (reanimated to chce)
-import { enableScreens } from "react-native-screens";
-enableScreens(false);
+// src/app/_layout.tsx
+import "react-native-reanimated"; // musí byť úplne prvé
 
 import { useColorScheme } from "@/components/useColorScheme";
 import AuthProvider from "@/providers/AuthProvider";
@@ -22,7 +21,7 @@ export const unstable_settings = {
   initialRouteName: "(user)",
 };
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -35,7 +34,8 @@ export default function RootLayout() {
   }, [error]);
 
   useEffect(() => {
-    if (loaded) SplashScreen.hideAsync();
+    if (!loaded) return;
+    SplashScreen.hideAsync().catch(() => {});
   }, [loaded]);
 
   if (!loaded) return null;
@@ -53,8 +53,8 @@ function RootLayoutNav() {
           <Stack
             screenOptions={{
               headerShown: false,
-              animation: "none",
               gestureEnabled: false,
+              animationEnabled: false,
             }}
           >
             <Stack.Screen name="(user)" />
@@ -62,7 +62,11 @@ function RootLayoutNav() {
             <Stack.Screen name="(auth)" />
             <Stack.Screen
               name="modal"
-              options={{ presentation: "modal", animation: "none" }}
+              options={{
+                presentation: "modal",
+                gestureEnabled: false,
+                animationEnabled: false,
+              }}
             />
           </Stack>
         </AuthProvider>

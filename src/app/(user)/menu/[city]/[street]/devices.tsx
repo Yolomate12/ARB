@@ -2,7 +2,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 import { useLanguage } from "@/providers/LanguageProvider";
 import { useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -16,16 +16,28 @@ import {
 } from "react-native";
 import { AnimatedCircularProgress } from "react-native-circular-progress";
 
+type TankRow = {
+  device_id: string;
+  tank_id: number | string;
+  level: number | string | null;
+};
+
+type DeviceRow = {
+  device_id: string;
+  device_name: string | null;
+  status: string | null;
+};
+
 type Tank = {
   tank_id: number;
-  level: number | null;
+  level: number; // ✅ vždy number 0..100
 };
 
 type DeviceItem = {
   device_id: string;
   device_name: string;
   status: string;
-  tanks: Tank[];
+  tanks: Tank[]; // ✅ vždy 4 tanky
 };
 
 const TANK_TYPE_KEYS: Record<
@@ -45,64 +57,131 @@ const TANK_COLORS: Record<number, string> = {
   4: "#FF0000",
 };
 
+const TANK_IDS = [1, 2, 3, 4] as const;
+
 const { width: W, height: H } = Dimensions.get("window");
 const vw = (p: number) => (W * p) / 100;
 const vh = (p: number) => (H * p) / 100;
 const fs = (b: number) => Math.max(12, (b * W) / 375);
 
+const firstParam = (v: string | string[] | undefined) =>
+  Array.isArray(v) ? v[0] : v;
+
+const clampPercent = (v: unknown): number => {
+  // zvládne number, "42", "42.5", null, undefined
+  const n = Number(v ?? 0);
+  if (!Number.isFinite(n)) return 0;
+  return Math.max(0, Math.min(100, n));
+};
+
+const normalizeTanks = (tanks: Tank[]): Tank[] => {
+  const map = new Map<number, Tank>();
+  for (const t of tanks) map.set(t.tank_id, t);
+  return TANK_IDS.map((id) => map.get(id) ?? { tank_id: id, level: 0 });
+};
+
 export default function StreetDevicesScreen() {
   const { t } = useLanguage();
-  const { city, street } = useLocalSearchParams<{
-    city: string;
-    street: string;
-  }>();
+  const params = useLocalSearchParams<{ city?: string; street?: string }>();
   const { profile } = useAuth();
 
+  const city = (firstParam(params.city) ?? "").trim();
+  const street = (firstParam(params.street) ?? "").trim();
+  const orgId = profile?.id_org ?? null;
+
   const [devices, setDevices] = useState<DeviceItem[]>([]);
-  const [filteredDevices, setFilteredDevices] = useState<DeviceItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  const fetchDevices = async (opts?: { silent?: boolean }) => {
-    if (!city || !street || !profile?.id_org) return;
+  const canQuery = !!city && !!street && !!orgId;
 
+  const fetchDevices = async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent ?? false;
+
+    if (!canQuery) {
+      if (!silent) setLoading(false);
+      setDevices([]);
+      setError(!orgId ? "Chýba organizácia v profile." : "Neplatná adresa.");
+      return;
+    }
 
     try {
       if (!silent) setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase
+      // 1) devices
+      const { data: devData, error: devErr } = await supabase
         .from("bin_full_info")
         .select("device_id, device_name, status")
         .eq("name_city", city)
         .eq("name_street", street)
-        .eq("id_org", profile.id_org);
+        .eq("id_org", orgId);
 
-      if (error) throw error;
+      if (devErr) throw devErr;
 
-      const withTanks: DeviceItem[] = await Promise.all(
-        (data || []).map(async (d) => {
-          const { data: tanks } = await supabase
-            .from("tank_status")
-            .select("tank_id, level")
-            .eq("device_id", d.device_id);
+      const devRows = (devData ?? []) as DeviceRow[];
+      const deviceIds = devRows.map((d) => String(d.device_id));
 
-          return {
-            device_id: d.device_id,
-            device_name: d.device_name,
-            status: d.status,
-            tanks: tanks || [],
-          };
-        }),
-      );
+      // DEBUG: zistíš, či vôbec niečo fetchuješ
+      // eslint-disable-next-line no-console
+      console.log("USER DEVICES DEBUG", {
+        city,
+        street,
+        orgId,
+        count: deviceIds.length,
+      });
 
-      setDevices(withTanks);
-      setFilteredDevices(withTanks);
+      if (deviceIds.length === 0) {
+        setDevices([]);
+        return;
+      }
+
+      // 2) tank_status pre všetky deviceIds naraz
+      const { data: tankData, error: tankErr } = await supabase
+        .from("tank_status")
+        .select("device_id, tank_id, level")
+        .in("device_id", deviceIds);
+
+      if (tankErr) throw tankErr;
+
+      const tankRows = (tankData ?? []) as TankRow[];
+
+      // DEBUG: ak je 0, je to RLS/join problém
+      // eslint-disable-next-line no-console
+      console.log("USER TANKS DEBUG", {
+        tankRows: tankRows.length,
+        sample: tankRows.slice(0, 3),
+      });
+
+      // group tanks
+      const tanksByDevice = new Map<string, Tank[]>();
+      for (const tr of tankRows) {
+        const did = String(tr.device_id);
+        const arr = tanksByDevice.get(did) ?? [];
+        arr.push({
+          tank_id: Number(tr.tank_id),
+          level: clampPercent(tr.level),
+        });
+        tanksByDevice.set(did, arr);
+      }
+
+      const merged: DeviceItem[] = devRows.map((d) => {
+        const did = String(d.device_id);
+        const raw = tanksByDevice.get(did) ?? [];
+        return {
+          device_id: did,
+          device_name: (d.device_name ?? "Bez názvu").toString(),
+          status: (d.status ?? "unknown").toString(),
+          tanks: normalizeTanks(raw),
+        };
+      });
+
+      setDevices(merged);
     } catch (e: any) {
       setError(e?.message || t("errorLoadingDevices"));
+      setDevices([]);
     } finally {
       if (!silent) setLoading(false);
     }
@@ -110,13 +189,13 @@ export default function StreetDevicesScreen() {
 
   useEffect(() => {
     fetchDevices();
-  }, [city, street, profile?.id_org]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [city, street, orgId]);
 
-  useEffect(() => {
-    const q = search.toLowerCase();
-    setFilteredDevices(
-      devices.filter((d) => d.device_name.toLowerCase().includes(q)),
-    );
+  const filteredDevices = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return devices;
+    return devices.filter((d) => d.device_name.toLowerCase().includes(q));
   }, [search, devices]);
 
   const onRefresh = async () => {
@@ -124,6 +203,9 @@ export default function StreetDevicesScreen() {
     await fetchDevices({ silent: true });
     setRefreshing(false);
   };
+
+  const circleSize = vw(18);
+  const circleWidth = Math.max(2, vw(2));
 
   if (loading) {
     return (
@@ -137,12 +219,12 @@ export default function StreetDevicesScreen() {
     return (
       <View style={styles.centered}>
         <Text style={styles.error}>{error}</Text>
+        <Pressable style={styles.retryBtn} onPress={() => fetchDevices()}>
+          <Text style={styles.retryBtnText}>Skúsiť znova</Text>
+        </Pressable>
       </View>
     );
   }
-
-  const circleSize = vw(18);
-  const circleWidth = vw(2);
 
   return (
     <View style={styles.container}>
@@ -155,7 +237,7 @@ export default function StreetDevicesScreen() {
       />
 
       <Text style={styles.header}>
-        ... / {city} / {street}
+        ... / {city || "-"} / {street || "-"}
       </Text>
 
       <FlatList
@@ -172,32 +254,44 @@ export default function StreetDevicesScreen() {
               {t("statusLabel")}: {item.status}
             </Text>
 
-            {/* PROGRESS BARY – VŽDY V JEDNOM RIADKU */}
             <View style={styles.progressRow}>
-              {item.tanks.map((tank) => (
-                <View key={tank.tank_id} style={styles.progressItem}>
-                  <AnimatedCircularProgress
-                    size={circleSize}
-                    width={circleWidth}
-                    fill={tank.level ?? 0}
-                    tintColor={TANK_COLORS[tank.tank_id]}
-                    backgroundColor="#FFE5B4"
-                  >
-                    {() => (
-                      <Text style={{ fontSize: fs(12) }}>
-                        {tank.level ?? 0}%
-                      </Text>
-                    )}
-                  </AnimatedCircularProgress>
+              {item.tanks.map((tank) => {
+                const fill = tank.level; // ✅ už je clampnuté
+                const color = TANK_COLORS[tank.tank_id] ?? "#FF9627";
+                const labelKey = TANK_TYPE_KEYS[tank.tank_id] ?? "tankMixed";
 
-                  <Text style={styles.tankLabel}>
-                    {t(TANK_TYPE_KEYS[tank.tank_id])}
-                  </Text>
-                </View>
-              ))}
+                return (
+                  <View key={tank.tank_id} style={styles.progressItem}>
+                    <AnimatedCircularProgress
+                      size={circleSize}
+                      width={circleWidth}
+                      fill={fill}
+                      tintColor={color}
+                      backgroundColor="#FFE5B4"
+                      rotation={0}
+                      lineCap="round"
+                    >
+                      {() => (
+                        <Text style={{ fontSize: fs(12), fontWeight: "900" }}>
+                          {fill}%
+                        </Text>
+                      )}
+                    </AnimatedCircularProgress>
+
+                    <Text style={styles.tankLabel}>{t(labelKey)}</Text>
+                  </View>
+                );
+              })}
             </View>
           </Pressable>
         )}
+        ListEmptyComponent={
+          <View style={{ paddingTop: 40, alignItems: "center" }}>
+            <Text style={{ color: "#777", fontWeight: "600" }}>
+              Žiadne zariadenia
+            </Text>
+          </View>
+        }
       />
     </View>
   );
@@ -211,7 +305,16 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
   },
   centered: { flex: 1, justifyContent: "center", alignItems: "center" },
-  error: { color: "red", fontSize: fs(16) },
+  error: { color: "red", fontSize: fs(16), textAlign: "center" },
+
+  retryBtn: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "#111",
+  },
+  retryBtnText: { color: "#fff", fontWeight: "900" },
 
   searchInput: {
     height: vh(6),
@@ -243,7 +346,6 @@ const styles = StyleSheet.create({
   deviceName: { fontSize: fs(18), fontWeight: "bold" },
   statusText: { fontSize: fs(14), color: "gray", marginTop: vh(0.5) },
 
-  /* 🔑 DÔLEŽITÁ ČASŤ */
   progressRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -251,7 +353,7 @@ const styles = StyleSheet.create({
   },
 
   progressItem: {
-    width: "24%", // 4 progress bary vedľa seba
+    width: "24%",
     alignItems: "center",
   },
 
