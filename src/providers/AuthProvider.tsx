@@ -63,7 +63,7 @@ export default function AuthProvider({ children }: PropsWithChildren) {
       const { data, error } = await supabase.auth.getSession();
 
       if (error) {
-        // ⛔ neplatný refresh token → reset
+        //  neplatný refresh token → reset
         await signOut();
         setLoading(false);
         return;
@@ -84,7 +84,6 @@ export default function AuthProvider({ children }: PropsWithChildren) {
 
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        // 🔥 TOTO rieši tvoju chybu
         if (event === "TOKEN_REFRESH_FAILED") {
           await signOut();
           return;

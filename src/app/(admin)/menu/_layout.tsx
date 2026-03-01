@@ -55,7 +55,6 @@ export default function AdminMenuLayout() {
 
       <Stack.Screen name="organisation/index" />
       <Stack.Screen name="organisation/items" />
-      <Stack.Screen name="organisation/settings" />
       <Stack.Screen name="organisation/[id_org]" />
     </Stack>
   );

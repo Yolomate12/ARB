@@ -1,5 +1,6 @@
 import Colors from "@/constants/Colors";
 import { supabase } from "@/lib/supabase";
+import { useLanguage } from "@/providers/LanguageProvider";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -27,11 +28,12 @@ type OrgRow = {
 const ORANGE = Colors.orange?.background ?? "#F7941D";
 const STICKY_THRESHOLD = 4;
 
-// nastav si sem, kam má "Back" z adminu viesť (admin root)
+// kam má "Back" na tomto screen-e viesť (admin root)
 const ADMIN_ROOT_ROUTE = "/(admin)/menu/items";
 
 export default function AdminOrganizationsScreen() {
   const router = useRouter();
+  const { t } = useLanguage();
 
   const [rows, setRows] = useState<OrgRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,16 +83,14 @@ export default function AdminOrganizationsScreen() {
 
   const sticky = filtered.length >= STICKY_THRESHOLD;
 
-  // ✅ zabráni tomu, aby "back" z adminu spadol do user stacku
+  // ✅ zabráni tomu, aby Android hard-back padol do user stacku
   useFocusEffect(
     useCallback(() => {
       const onBackPress = () => {
-        // Admin list je braná ako root. Namiesto "goBack" spravíme replace na admin root.
         router.replace(ADMIN_ROOT_ROUTE);
         return true;
       };
 
-      // Android hardware back
       const sub = BackHandler.addEventListener(
         "hardwareBackPress",
         onBackPress,
@@ -106,14 +106,14 @@ export default function AdminOrganizationsScreen() {
         style={styles.outlineBtn}
         onPress={() => router.push("/(admin)/menu/addOrganisation")}
       >
-        <Text style={styles.outlineText}>NOVÁ ORGANIZÁCIA</Text>
+        <Text style={styles.outlineText}>{t("adminNewOrganisation")}</Text>
       </Pressable>
 
       <Pressable
         style={styles.filledBtn}
         onPress={() => router.push("/(admin)/menu/addDevice")}
       >
-        <Text style={styles.filledText}>NOVÉ ZARIADENIE</Text>
+        <Text style={styles.filledText}>{t("adminNewDevice")}</Text>
       </Pressable>
     </>
   );
@@ -128,11 +128,11 @@ export default function AdminOrganizationsScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Organizácie</Text>
+      <Text style={styles.title}>{t("adminOrganizationsTitle")}</Text>
 
       <View style={styles.searchBox}>
         <TextInput
-          placeholder="Search..."
+          placeholder={t("searchPlaceholder")}
           placeholderTextColor="#A6A6A6"
           value={search}
           onChangeText={setSearch}
@@ -174,11 +174,12 @@ export default function AdminOrganizationsScreen() {
 
             <View style={styles.body}>
               <Text style={styles.name} numberOfLines={2}>
-                {item.nazov_org ?? "Bez názvu"}
+                {item.nazov_org ?? t("adminUnnamed")}
               </Text>
 
               <Text style={styles.meta}>
-                {item.online_count} online, {item.offline_count} offline
+                {item.online_count} {t("online")}, {item.offline_count}{" "}
+                {t("offline")}
               </Text>
             </View>
 
@@ -191,7 +192,7 @@ export default function AdminOrganizationsScreen() {
         ListEmptyComponent={
           <View style={{ paddingTop: 40, alignItems: "center" }}>
             <Text style={{ color: "#777", fontWeight: "600" }}>
-              Žiadne organizácie
+              {t("adminNoOrganizations")}
             </Text>
           </View>
         }

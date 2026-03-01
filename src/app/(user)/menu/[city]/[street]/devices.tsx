@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
   retryBtnText: { color: "#fff", fontWeight: "900" },
 
   searchInput: {
-    height: vh(6),
+    height: vh(8),
     borderRadius: vw(2),
     borderWidth: 1,
     borderColor: "#E2E2E2",

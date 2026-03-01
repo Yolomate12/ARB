@@ -1,6 +1,5 @@
 import { supabase } from "@/lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { Link } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -29,11 +28,11 @@ const SignUpScreen = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.welcomeText}>Get started</Text>
+      <Text style={styles.welcomeText}>Vytvoriť učet</Text>
 
       <View>
         <View style={styles.containerValue}></View>
-        <Text style={styles.labelEmail}>Email Address</Text>
+        <Text style={styles.labelEmail}>E-mail adresa</Text>
         <TextInput
           value={email}
           onChangeText={setEmail}
@@ -44,7 +43,7 @@ const SignUpScreen = () => {
 
       <View>
         <View style={styles.containerValuePassword}></View>
-        <Text style={styles.labelPassword}>Password</Text>
+        <Text style={styles.labelPassword}>Heslo</Text>
 
         <View style={styles.passwordWrap}>
           <TextInput
@@ -69,24 +68,17 @@ const SignUpScreen = () => {
         </View>
       </View>
 
-      <LinearGradient
-        colors={["#F95A00", "#FFBB00"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.gradientButton}
-      >
-        <WButton
-          onPress={signUpWithEmail}
-          disabled={loading}
-          style={styles.button}
-          text={loading ? "Creating account..." : "Sign up"}
-        />
-      </LinearGradient>
+      <WButton
+        onPress={signUpWithEmail}
+        disabled={loading}
+        style={styles.button}
+        text={loading ? "Vytváranie..." : "Vytvoriť učet"}
+      />
 
       <View style={styles.containerSignUp}>
-        <Text style={styles.textAccount}>If you have an account?</Text>
+        <Text style={styles.textAccount}>Nemáte vytvorené konto?</Text>
         <Link style={styles.link} href={"/(auth)/sign-in"}>
-          Sign in
+          Vytvoriť učet
         </Link>
       </View>
     </View>
@@ -127,17 +119,12 @@ const styles = StyleSheet.create({
     color: "#F95E01",
   },
   button: {
-    height: "100%",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "transparent",
-  },
-  gradientButton: {
+    backgroundColor: "#FF9627",
     width: width * 0.9,
     height: width * 0.14,
     marginTop: width * 0.15,
-    justifyContent: "center",
-    alignItems: "center",
   },
   containerValue: {
     position: "absolute",
@@ -149,7 +136,7 @@ const styles = StyleSheet.create({
   },
   containerValuePassword: {
     position: "absolute",
-    width: width * 0.22,
+    width: width * 0.16,
     height: width * 0.05,
     left: width * 0.05,
     backgroundColor: "white",

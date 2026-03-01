@@ -1,5 +1,6 @@
 import Colors from "@/constants/Colors";
 import { supabase } from "@/lib/supabase";
+import { useLanguage } from "@/providers/LanguageProvider";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -18,7 +19,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { GooglePlacesAutocomplete } from "react-native-google-places-autocomplete";
 import MapView, { MapPressEvent, Marker } from "react-native-maps";
 
 const ORANGE = Colors.orange?.background ?? "#F7941D";
@@ -38,8 +38,9 @@ type CountryRow = {
   iso3: string;
 };
 
-export default function NewOrganisationScreen() {
+export default function AddOrganisationScreen() {
   const router = useRouter();
+  const { t } = useLanguage();
   const mapRef = useRef<MapView | null>(null);
 
   // form
@@ -75,21 +76,20 @@ export default function NewOrganisationScreen() {
   const coords = useMemo(() => {
     const la = Number(lat);
     const lo = Number(lng);
-    const latOk = lat.trim() && !Number.isNaN(la);
-    const lngOk = lng.trim() && !Number.isNaN(lo);
+    const latOk = lat.trim() !== "" && !Number.isNaN(la);
+    const lngOk = lng.trim() !== "" && !Number.isNaN(lo);
     return latOk && lngOk ? { latitude: la, longitude: lo } : null;
   }, [lat, lng]);
 
   const canSubmit = useMemo(() => {
     if (!orgName.trim()) return false;
 
-    // HQ address required
     if (!selectedCountry) return false;
     if (!city.trim()) return false;
     if (!street.trim()) return false;
 
     // coords optional, but if one is filled, both must be valid numbers
-    const anyCoord = lat.trim() || lng.trim();
+    const anyCoord = lat.trim() !== "" || lng.trim() !== "";
     if (anyCoord && !coords) return false;
 
     return true;
@@ -97,19 +97,22 @@ export default function NewOrganisationScreen() {
 
   const loadCountries = async () => {
     setCountriesLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("country")
+        .select("id,country_name,iso2,iso3")
+        .order("country_name", { ascending: true });
 
-    const { data, error } = await supabase
-      .from("country")
-      .select("id,country_name,iso2,iso3")
-      .order("country_name", { ascending: true });
+      if (error) {
+        console.log("country load error:", error);
+        setCountries([]);
+        return;
+      }
 
-    if (error) {
-      console.log("country load error:", error);
-    } else {
       setCountries((data ?? []) as CountryRow[]);
+    } finally {
+      setCountriesLoading(false);
     }
-
-    setCountriesLoading(false);
   };
 
   useEffect(() => {
@@ -137,13 +140,14 @@ export default function NewOrganisationScreen() {
 
     for (let i = 0; i < 8; i++) {
       const code = randomCompanyCode6();
+
       const { data, error } = await supabase
         .from("organisation")
         .select("id")
         .eq("company_code", code)
         .limit(1);
 
-      // if uniqueness check fails, don't block the user
+      // ak check padne, neblokuj usera
       if (error) {
         setCompanyCode(code);
         return code;
@@ -162,60 +166,76 @@ export default function NewOrganisationScreen() {
 
   const onPickOnMap = (e: MapPressEvent) => {
     const { latitude, longitude } = e.nativeEvent.coordinate;
+
     setLat(String(latitude));
     setLng(String(longitude));
+
+    mapRef.current?.animateToRegion(
+      {
+        latitude,
+        longitude,
+        latitudeDelta: 0.02,
+        longitudeDelta: 0.02,
+      },
+      250,
+    );
   };
 
   const submit = async () => {
     if (!canSubmit || saving) return;
 
     if (!orgName.trim()) {
-      Alert.alert("Chyba", "Zadaj názov organizácie.");
+      Alert.alert(t("errorLabel"), t("orgNameRequired"));
       return;
     }
     if (!selectedCountry) {
-      Alert.alert("Chyba", "Vyber krajinu.");
+      Alert.alert(t("errorLabel"), t("countryRequired"));
       return;
     }
     if (!city.trim()) {
-      Alert.alert("Chyba", "Zadaj mesto.");
+      Alert.alert(t("errorLabel"), t("cityRequired"));
       return;
     }
     if (!street.trim()) {
-      Alert.alert("Chyba", "Zadaj ulicu (aj číslo).");
+      Alert.alert(t("errorLabel"), t("streetRequired"));
       return;
     }
 
     setSaving(true);
 
-    const code = await ensureCompanyCode();
+    try {
+      const code = await ensureCompanyCode();
 
-    const { data, error } = await supabase.rpc("create_organisation_with_hq", {
-      p_nazov_org: orgName.trim(),
-      p_company_code: onlyDigits(code),
-      p_description: description.trim() || null,
-      p_latitude: coords ? coords.latitude : null,
-      p_longitude: coords ? coords.longitude : null,
-      p_country_id: selectedCountry.id,
-      p_city_name: city.trim(),
-      p_street: street.trim(),
-    });
+      const { data, error } = await supabase.rpc(
+        "create_organisation_with_hq",
+        {
+          p_nazov_org: orgName.trim(),
+          p_company_code: onlyDigits(code),
+          p_description: description.trim() || null,
+          p_latitude: coords ? coords.latitude : null,
+          p_longitude: coords ? coords.longitude : null,
+          p_country_id: selectedCountry.id,
+          p_city_name: city.trim(),
+          p_street: street.trim(),
+        },
+      );
 
-    setSaving(false);
+      if (error) {
+        console.log("rpc create_organisation_with_hq error:", error);
+        Alert.alert(t("errorLabel"), error.message);
+        return;
+      }
 
-    if (error) {
-      console.log("rpc create_organisation_with_hq error:", error);
-      Alert.alert("Chyba", error.message);
-      return;
+      const orgId = data as number | null;
+
+      Alert.alert(
+        t("doneTitle"),
+        `${t("orgCreated")}\nID: ${orgId ?? "?"}\n${t("companyCode")}: ${code}`,
+        [{ text: "OK", onPress: () => router.back() }],
+      );
+    } finally {
+      setSaving(false);
     }
-
-    const orgId = data as number | null;
-
-    Alert.alert(
-      "Hotovo",
-      `Organizácia bola vytvorená.\nID: ${orgId ?? "?"}\nCompany code: ${code}`,
-      [{ text: "OK", onPress: () => router.back() }],
-    );
   };
 
   const initialRegion = useMemo(() => {
@@ -225,9 +245,7 @@ export default function NewOrganisationScreen() {
 
   const selectedCountryLabel = selectedCountry
     ? `${selectedCountry.country_name} (${selectedCountry.iso2})`
-    : "Vyber krajinu";
-
-  const placesApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+    : t("pickCountry");
 
   return (
     <KeyboardAvoidingView
@@ -238,28 +256,28 @@ export default function NewOrganisationScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.title}>Nová organizácia</Text>
+        <Text style={styles.title}>{t("newOrganisationTitle")}</Text>
 
-        <Text style={styles.sectionLabel}>Názov organizácie</Text>
+        <Text style={styles.sectionLabel}>{t("orgNameLabel")}</Text>
         <TextInput
           value={orgName}
           onChangeText={setOrgName}
-          placeholder="Názov organizácie"
+          placeholder={t("orgNamePlaceholder")}
           placeholderTextColor="#A8A8A8"
           style={styles.input}
         />
 
-        <Text style={styles.sectionLabel}>Popis</Text>
+        <Text style={styles.sectionLabel}>{t("descriptionLabel")}</Text>
         <TextInput
           value={description}
           onChangeText={setDescription}
-          placeholder="Stručný popis"
+          placeholder={t("descriptionPlaceholder")}
           placeholderTextColor="#A8A8A8"
           style={[styles.input, styles.textArea]}
           multiline
         />
 
-        <Text style={styles.sectionLabel}>Krajina (sídlo)</Text>
+        <Text style={styles.sectionLabel}>{t("hqCountryLabel")}</Text>
         <Pressable
           style={[styles.input, styles.dropdownInput]}
           onPress={() => setCountryOpen(true)}
@@ -278,30 +296,30 @@ export default function NewOrganisationScreen() {
           <FontAwesome name="chevron-down" size={16} color="#999" />
         </Pressable>
 
-        <Text style={styles.sectionLabel}>Mesto (sídlo)</Text>
+        <Text style={styles.sectionLabel}>{t("hqCityLabel")}</Text>
         <TextInput
           value={city}
           onChangeText={setCity}
-          placeholder="Napr. Prešov"
+          placeholder={t("hqCityPlaceholder")}
           placeholderTextColor="#A8A8A8"
           style={styles.input}
         />
 
-        <Text style={styles.sectionLabel}>Ulica + číslo (sídlo)</Text>
+        <Text style={styles.sectionLabel}>{t("hqStreetLabel")}</Text>
         <TextInput
           value={street}
           onChangeText={setStreet}
-          placeholder="Napr. Hlavná 12"
+          placeholder={t("hqStreetPlaceholder")}
           placeholderTextColor="#A8A8A8"
           style={styles.input}
         />
 
         <View style={styles.coordsHeader}>
-          <Text style={styles.sectionLabel}>Súradnice (voliteľné)</Text>
+          <Text style={styles.sectionLabel}>{t("coordsOptional")}</Text>
 
           <Pressable style={styles.mapBtn} onPress={() => setMapOpen(true)}>
             <FontAwesome name="map" size={16} color={ORANGE} />
-            <Text style={styles.mapBtnText}>Vybrať na mape</Text>
+            <Text style={styles.mapBtnText}>{t("pickOnMap")}</Text>
           </Pressable>
         </View>
 
@@ -309,32 +327,36 @@ export default function NewOrganisationScreen() {
           <TextInput
             value={lat}
             onChangeText={setLat}
-            placeholder="Latitude"
+            placeholder={t("latitude")}
             placeholderTextColor="#A8A8A8"
             style={[styles.input, styles.half]}
-            keyboardType="numeric"
+            keyboardType="numbers-and-punctuation"
+            autoCapitalize="none"
+            autoCorrect={false}
           />
           <TextInput
             value={lng}
             onChangeText={setLng}
-            placeholder="Longitude"
+            placeholder={t("longitude")}
             placeholderTextColor="#A8A8A8"
             style={[styles.input, styles.half]}
-            keyboardType="numeric"
+            keyboardType="numbers-and-punctuation"
+            autoCapitalize="none"
+            autoCorrect={false}
           />
         </View>
 
         <View style={styles.codeRow}>
-          <Text style={styles.codeLabel}>Company code</Text>
+          <Text style={styles.codeLabel}>{t("companyCode")}</Text>
           <Pressable
             style={styles.codePill}
             onPress={async () => {
               const c = await ensureCompanyCode();
-              Alert.alert("Company code", c);
+              Alert.alert(t("companyCode"), c);
             }}
           >
             <Text style={styles.codePillText}>
-              {companyCode.trim() ? companyCode : "Vygeneruje sa automaticky"}
+              {companyCode.trim() ? companyCode : t("companyCodeAuto")}
             </Text>
           </Pressable>
         </View>
@@ -347,7 +369,7 @@ export default function NewOrganisationScreen() {
           {saving ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.submitText}>Hotovo</Text>
+            <Text style={styles.submitText}>{t("doneButton")}</Text>
           )}
         </Pressable>
 
@@ -356,7 +378,7 @@ export default function NewOrganisationScreen() {
           onPress={() => router.back()}
           disabled={saving}
         >
-          <Text style={styles.cancelText}>Zrušiť</Text>
+          <Text style={styles.cancelText}>{t("cancel")}</Text>
         </Pressable>
       </ScrollView>
 
@@ -368,12 +390,12 @@ export default function NewOrganisationScreen() {
       >
         <View style={styles.modalWrap}>
           <View style={styles.modalTopBar}>
-            <Text style={styles.modalTitle}>Vyber krajinu</Text>
+            <Text style={styles.modalTitle}>{t("pickCountryTitle")}</Text>
             <Pressable
               onPress={() => setCountryOpen(false)}
               style={styles.modalClose}
             >
-              <Text style={styles.modalCloseText}>Hotovo</Text>
+              <Text style={styles.modalCloseText}>{t("doneButton")}</Text>
             </Pressable>
           </View>
 
@@ -382,9 +404,11 @@ export default function NewOrganisationScreen() {
               <TextInput
                 value={countrySearch}
                 onChangeText={setCountrySearch}
-                placeholder="Hľadať (názov, ISO2, ISO3)"
+                placeholder={t("countrySearchPlaceholder")}
                 placeholderTextColor="#A8A8A8"
                 style={styles.searchInput}
+                autoCorrect={false}
+                autoCapitalize="none"
               />
               <FontAwesome name="search" size={18} color="#111" />
             </View>
@@ -409,7 +433,7 @@ export default function NewOrganisationScreen() {
               ListEmptyComponent={
                 <View style={{ paddingTop: 40, alignItems: "center" }}>
                   <Text style={{ color: "#777", fontWeight: "700" }}>
-                    Žiadne výsledky
+                    {t("noResults")}
                   </Text>
                 </View>
               }
@@ -446,7 +470,7 @@ export default function NewOrganisationScreen() {
         </View>
       </Modal>
 
-      {/* MAP MODAL */}
+      {/* MAP MODAL (bez vyhľadávania) */}
       <Modal
         visible={mapOpen}
         animationType="slide"
@@ -454,58 +478,19 @@ export default function NewOrganisationScreen() {
       >
         <View style={styles.mapContainer}>
           <View style={styles.mapTopBar}>
-            <View style={{ flex: 1, marginRight: 10, zIndex: 10 }}>
-              {placesApiKey ? (
-                <GooglePlacesAutocomplete
-                  placeholder="Hľadať miesto / adresu"
-                  fetchDetails
-                  enablePoweredByContainer={false}
-                  query={{
-                    key: placesApiKey,
-                    language: "sk",
-                    // components: "country:sk",
-                  }}
-                  styles={{
-                    container: { flex: 1 },
-                    textInput: styles.mapSearchInput,
-                    listView: styles.mapSearchList,
-                  }}
-                  onPress={(data, details) => {
-                    const loc = details?.geometry?.location;
-                    if (!loc) return;
-
-                    const latitude = loc.lat;
-                    const longitude = loc.lng;
-
-                    setLat(String(latitude));
-                    setLng(String(longitude));
-
-                    mapRef.current?.animateToRegion(
-                      {
-                        latitude,
-                        longitude,
-                        latitudeDelta: 0.02,
-                        longitudeDelta: 0.02,
-                      },
-                      350,
-                    );
-                  }}
-                />
-              ) : (
-                <View style={styles.mapSearchFallback}>
-                  <Text style={styles.mapSearchFallbackText}>
-                    Chýba EXPO_PUBLIC_GOOGLE_MAPS_API_KEY (Places search je
-                    vypnutý).
-                  </Text>
-                </View>
-              )}
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <View style={styles.mapSearchFallback}>
+                <Text style={styles.mapSearchFallbackText}>
+                  Klikni na mapu pre výber polohy
+                </Text>
+              </View>
             </View>
 
             <Pressable
               onPress={() => setMapOpen(false)}
               style={styles.mapClose}
             >
-              <Text style={styles.mapCloseText}>Hotovo</Text>
+              <Text style={styles.mapCloseText}>{t("doneButton")}</Text>
             </Pressable>
           </View>
 
@@ -519,10 +504,7 @@ export default function NewOrganisationScreen() {
           </MapView>
 
           <View style={styles.mapHint}>
-            <Text style={styles.mapHintText}>
-              Ťukni do mapy pre nastavenie markeru. Súradnice sa vyplnia
-              automaticky.
-            </Text>
+            <Text style={styles.mapHintText}>{t("mapHint")}</Text>
           </View>
         </View>
       </Modal>
@@ -709,22 +691,6 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
 
-  mapSearchInput: {
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E6E6E6",
-    paddingHorizontal: 12,
-    fontSize: 15,
-    color: "#111",
-    backgroundColor: "#fff",
-  },
-  mapSearchList: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E6E6E6",
-    marginTop: 8,
-  },
   mapSearchFallback: {
     height: 44,
     borderRadius: 12,
@@ -737,7 +703,6 @@ const styles = StyleSheet.create({
   },
   mapSearchFallbackText: { fontSize: 12, color: "#666", fontWeight: "700" },
 
-  mapTitle: { fontSize: 18, fontWeight: "900", color: "#111" },
   mapClose: {
     backgroundColor: ORANGE,
     borderRadius: 12,
@@ -745,6 +710,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   mapCloseText: { color: "#fff", fontWeight: "900" },
+
   map: { flex: 1 },
   mapHint: {
     paddingHorizontal: 16,

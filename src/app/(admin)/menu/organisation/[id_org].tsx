@@ -25,7 +25,7 @@ type Tank = {
 };
 
 type DeviceRow = {
-  bin_id: number; // ✅ z view
+  bin_id: number; // z view bin_full_info
   device_id: string;
   device_name: string | null;
   status: string | null;
@@ -40,6 +40,11 @@ type DeviceItem = {
 };
 
 const ORANGE = Colors.orange?.background ?? "#F7941D";
+
+const { width: W, height: H } = Dimensions.get("window");
+const vw = (p: number) => (W * p) / 100;
+const vh = (p: number) => (H * p) / 100;
+const fs = (b: number) => Math.max(12, (b * W) / 375);
 
 const TANK_TYPE_KEYS: Record<
   number,
@@ -60,11 +65,6 @@ const TANK_COLORS: Record<number, string> = {
 
 const TANK_IDS = [1, 2, 3, 4] as const;
 
-const { width: W, height: H } = Dimensions.get("window");
-const vw = (p: number) => (W * p) / 100;
-const vh = (p: number) => (H * p) / 100;
-const fs = (b: number) => Math.max(12, (b * W) / 375);
-
 const clampPercent = (v: number | null | undefined) => {
   const n = Number(v ?? 0);
   if (!Number.isFinite(n)) return 0;
@@ -79,6 +79,7 @@ const normalizeTanks = (tanks: { tank_id: number; level: number | null }[]) => {
 
 export default function AdminOrganisationDevicesScreen() {
   const { t } = useLanguage();
+
   const params = useLocalSearchParams<{
     id_org?: string;
     nazov_org?: string;
@@ -87,6 +88,7 @@ export default function AdminOrganisationDevicesScreen() {
   const idOrgStr = Array.isArray(params.id_org)
     ? params.id_org[0]
     : params.id_org;
+
   const orgNameStr = Array.isArray(params.nazov_org)
     ? params.nazov_org[0]
     : params.nazov_org;
@@ -100,7 +102,7 @@ export default function AdminOrganisationDevicesScreen() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  // ✅ modal
+  // modal
   const [modalOpen, setModalOpen] = useState(false);
   const [selected, setSelected] = useState<DeviceItem | null>(null);
   const [editName, setEditName] = useState("");
@@ -113,7 +115,7 @@ export default function AdminOrganisationDevicesScreen() {
     const silent = opts?.silent ?? false;
 
     if (!Number.isFinite(idOrg)) {
-      setError("Invalid organisation id");
+      setError(t("invalidOrganisationId"));
       setDevices([]);
       setLoading(false);
       return;
@@ -123,7 +125,7 @@ export default function AdminOrganisationDevicesScreen() {
       if (!silent) setLoading(true);
       setError(null);
 
-      // ✅ 1) koše/zariadenia cez VIEW (už má bin_id)
+      // 1) devices/bins z view
       const { data: devData, error: devErr } = await supabase
         .from("bin_full_info")
         .select("bin_id, device_id, device_name, status")
@@ -139,7 +141,7 @@ export default function AdminOrganisationDevicesScreen() {
         return;
       }
 
-      // ✅ 2) tanky pre všetky zariadenia naraz
+      // 2) tank status pre všetky zariadenia
       const { data: tankData, error: tankErr } = await supabase
         .from("tank_status")
         .select("device_id, tank_id, level")
@@ -153,6 +155,7 @@ export default function AdminOrganisationDevicesScreen() {
         string,
         { tank_id: number; level: number | null }[]
       >();
+
       for (const tk of tanks) {
         const did = String(tk.device_id);
         const arr = tanksByDevice.get(did) ?? [];
@@ -165,7 +168,7 @@ export default function AdminOrganisationDevicesScreen() {
         return {
           bin_id: Number(d.bin_id),
           device_id: did,
-          device_name: d.device_name ?? "Bez názvu",
+          device_name: d.device_name ?? t("noName"),
           status: d.status ?? "unknown",
           tanks: tanksByDevice.get(did) ?? [],
         };
@@ -175,7 +178,7 @@ export default function AdminOrganisationDevicesScreen() {
     } catch (e: any) {
       const msg =
         e?.code === "42501"
-          ? "Nemáš práva čítať dáta (RLS)."
+          ? t("noPermissionsRlsRead")
           : e?.message || t("errorLoadingDevices");
       setError(msg);
       setDevices([]);
@@ -219,14 +222,13 @@ export default function AdminOrganisationDevicesScreen() {
 
     const newName = editName.trim();
     if (!newName) {
-      Alert.alert("Chyba", "Názov zariadenia nemôže byť prázdny.");
+      Alert.alert(t("errorTitle"), t("deviceNameEmpty"));
       return;
     }
 
     try {
       setBusy(true);
 
-      // devices.name podľa tvojej DB
       const { error: updErr } = await supabase
         .from("devices")
         .update({ name: newName })
@@ -237,7 +239,7 @@ export default function AdminOrganisationDevicesScreen() {
       closeModal();
       await fetchDevices({ silent: true });
     } catch (e: any) {
-      Alert.alert("Chyba", e?.message ?? "Nepodarilo sa uložiť zmeny.");
+      Alert.alert(t("errorTitle"), e?.message ?? t("errorSavingChanges"));
     } finally {
       setBusy(false);
     }
@@ -246,50 +248,39 @@ export default function AdminOrganisationDevicesScreen() {
   const deleteBin = async () => {
     if (!selected) return;
 
-    Alert.alert(
-      "Odobrať kôš",
-      "Naozaj chceš odstrániť tento kôš? (Vymaže sa riadok z tabuľky bin.)",
-      [
-        { text: "Zrušiť", style: "cancel" },
-        {
-          text: "Odobrať",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setBusy(true);
+    Alert.alert(t("removeBinTitle"), t("removeBinConfirm"), [
+      { text: t("cancel"), style: "cancel" },
+      {
+        text: t("remove"),
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setBusy(true);
 
-              // ✅ správne: delete podľa bin.id
-              const { data: deleted, error: delErr } = await supabase
-                .from("bin")
-                .delete()
-                .eq("id", selected.bin_id)
-                .select("id");
+            const { data: deleted, error: delErr } = await supabase
+              .from("bin")
+              .delete()
+              .eq("id", selected.bin_id)
+              .select("id");
 
-              if (delErr) throw delErr;
+            if (delErr) throw delErr;
 
-              const deletedCount = deleted?.length ?? 0;
-              if (deletedCount === 0) {
-                Alert.alert(
-                  "Nezmazalo sa nič",
-                  "Delete vrátil 0 riadkov. Skontroluj RLS policy na bin.",
-                );
-                return;
-              }
-
-              closeModal();
-              await fetchDevices({ silent: true });
-            } catch (e: any) {
-              Alert.alert(
-                "Chyba",
-                e?.message ?? "Nepodarilo sa vymazať z bin.",
-              );
-            } finally {
-              setBusy(false);
+            const deletedCount = deleted?.length ?? 0;
+            if (deletedCount === 0) {
+              Alert.alert(t("nothingDeletedTitle"), t("nothingDeletedBody"));
+              return;
             }
-          },
+
+            closeModal();
+            await fetchDevices({ silent: true });
+          } catch (e: any) {
+            Alert.alert(t("errorTitle"), e?.message ?? t("errorDeletingBin"));
+          } finally {
+            setBusy(false);
+          }
         },
-      ],
-    );
+      },
+    ]);
   };
 
   if (loading) {
@@ -312,8 +303,8 @@ export default function AdminOrganisationDevicesScreen() {
     <View style={styles.container}>
       <Stack.Screen
         options={{
-          title: orgName || "Organizácia",
-          headerBackTitle: "Späť",
+          title: orgName || t("organisation"),
+          headerBackTitle: t("back"),
         }}
       />
 
@@ -323,9 +314,14 @@ export default function AdminOrganisationDevicesScreen() {
         onChangeText={setSearch}
         style={styles.searchInput}
         placeholderTextColor="#999"
+        autoCorrect={false}
+        autoCapitalize="none"
+        returnKeyType="search"
       />
 
-      <Text style={styles.header}>{orgName || `ID: ${idOrg}`}</Text>
+      <Text style={styles.header}>
+        {orgName || `${t("organisationId")}: ${idOrg}`}
+      </Text>
 
       <FlatList
         data={filteredDevices}
@@ -344,6 +340,7 @@ export default function AdminOrganisationDevicesScreen() {
             <View style={styles.progressRow}>
               {normalizeTanks(item.tanks).map((tank) => {
                 const fill = clampPercent(tank.level);
+                const labelKey = TANK_TYPE_KEYS[tank.tank_id] ?? "tankUnknown";
                 return (
                   <View key={tank.tank_id} style={styles.progressItem}>
                     <AnimatedCircularProgress
@@ -356,9 +353,7 @@ export default function AdminOrganisationDevicesScreen() {
                       {() => <Text style={{ fontSize: fs(12) }}>{fill}%</Text>}
                     </AnimatedCircularProgress>
 
-                    <Text style={styles.tankLabel}>
-                      {t(TANK_TYPE_KEYS[tank.tank_id] ?? "tankMixed")}
-                    </Text>
+                    <Text style={styles.tankLabel}>{t(labelKey)}</Text>
                   </View>
                 );
               })}
@@ -368,13 +363,13 @@ export default function AdminOrganisationDevicesScreen() {
         ListEmptyComponent={
           <View style={{ paddingTop: 40, alignItems: "center" }}>
             <Text style={{ color: "#777", fontWeight: "600" }}>
-              Žiadne zariadenia
+              {t("noDevicesInOrganisation")}
             </Text>
           </View>
         }
       />
 
-      {/* ✅ MODAL */}
+      {/* MODAL */}
       <Modal
         visible={modalOpen}
         transparent
@@ -382,16 +377,19 @@ export default function AdminOrganisationDevicesScreen() {
         onRequestClose={closeModal}
       >
         <Pressable style={styles.modalOverlay} onPress={closeModal}>
-          <Pressable style={styles.modalCard} onPress={() => {}}>
-            <Text style={styles.modalTitle}>Kôš / zariadenie</Text>
+          <Pressable
+            style={styles.modalCard}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={styles.modalTitle}>{t("binDeviceTitle")}</Text>
 
-            <Text style={styles.modalLabel}>Názov zariadenia</Text>
+            <Text style={styles.modalLabel}>{t("deviceNameLabel")}</Text>
             <TextInput
               value={editName}
               onChangeText={setEditName}
               style={styles.modalInput}
               editable={!busy}
-              placeholder="Názov"
+              placeholder={t("deviceNamePlaceholder")}
               placeholderTextColor="#999"
             />
 
@@ -405,7 +403,7 @@ export default function AdminOrganisationDevicesScreen() {
                 onPress={closeModal}
                 disabled={busy}
               >
-                <Text style={styles.modalBtnGhostText}>Zrušiť</Text>
+                <Text style={styles.modalBtnGhostText}>{t("cancel")}</Text>
               </Pressable>
 
               <Pressable
@@ -418,7 +416,7 @@ export default function AdminOrganisationDevicesScreen() {
                 disabled={busy}
               >
                 <Text style={styles.modalBtnPrimaryText}>
-                  {busy ? "Ukladám..." : "Uložiť"}
+                  {busy ? t("saving") : t("save")}
                 </Text>
               </Pressable>
             </View>
@@ -429,7 +427,7 @@ export default function AdminOrganisationDevicesScreen() {
               disabled={busy}
             >
               <Text style={styles.modalDangerText}>
-                Odobrať kôš z organizácie
+                {t("removeBinFromOrg")}
               </Text>
             </Pressable>
           </Pressable>
@@ -455,7 +453,7 @@ const styles = StyleSheet.create({
   },
 
   searchInput: {
-    height: vh(6),
+    height: vh(8),
     borderRadius: vw(2),
     borderWidth: 1,
     borderColor: "#E2E2E2",

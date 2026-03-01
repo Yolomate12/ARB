@@ -1,7 +1,6 @@
 import WButton from "@/components/Button_white";
 import { supabase } from "@/lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { Link, Stack, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
@@ -50,11 +49,11 @@ const SignInScreen = () => {
     <View style={styles.container}>
       <Stack.Screen options={{ title: "Sign in" }} />
 
-      <Text style={styles.welcomeText}>Welcome back!</Text>
+      <Text style={styles.welcomeText}>Vitajte späť!</Text>
 
       <View>
         <View style={styles.containerValue}></View>
-        <Text style={styles.labelEmail}>Email Address</Text>
+        <Text style={styles.labelEmail}>E-mail adresa</Text>
         <TextInput
           value={email}
           onChangeText={setEmail}
@@ -67,7 +66,7 @@ const SignInScreen = () => {
 
       <View>
         <View style={styles.containerValuePassword}></View>
-        <Text style={styles.labelPassword}>Password</Text>
+        <Text style={styles.labelPassword}>Heslo</Text>
 
         <View style={styles.passwordWrap}>
           <TextInput
@@ -99,25 +98,18 @@ const SignInScreen = () => {
           style={{ marginVertical: 20 }}
         />
       ) : (
-        <LinearGradient
-          colors={["#F95A00", "#FFBB00"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.gradientButton}
-        >
-          <WButton
-            onPress={signInWithEmail}
-            disabled={loading}
-            style={styles.button}
-            text={loading ? "Logging in..." : "Log in"}
-          />
-        </LinearGradient>
+        <WButton
+          onPress={signInWithEmail}
+          disabled={loading}
+          style={styles.button}
+          text={loading ? "Prihlasujem..." : "Prihlásiť sa"}
+        />
       )}
 
       <View style={styles.containerSignUp}>
-        <Text style={styles.textAccount}>Don’t have an account?</Text>
+        <Text style={styles.textAccount}>Nemáte vytvorené konto?</Text>
         <Link style={styles.link} href={"/(auth)/sign-up"}>
-          Sign up
+          Vytvoriť učet
         </Link>
       </View>
     </View>
@@ -152,10 +144,12 @@ const styles = StyleSheet.create({
   textAccount: { fontWeight: "400" },
   link: { fontWeight: "700", color: "#F95E01" },
   button: {
-    height: "100%",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "transparent",
+    width: width * 0.9,
+    height: width * 0.14,
+    backgroundColor: "#FF9627",
+    marginTop: width * 0.15,
   },
   gradientButton: {
     width: width * 0.9,
@@ -174,7 +168,7 @@ const styles = StyleSheet.create({
   },
   containerValuePassword: {
     position: "absolute",
-    width: width * 0.22,
+    width: width * 0.15,
     height: width * 0.05,
     left: width * 0.05,
     backgroundColor: "white",

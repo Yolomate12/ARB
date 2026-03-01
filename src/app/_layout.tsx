@@ -1,4 +1,3 @@
-// src/app/_layout.tsx
 import "react-native-reanimated"; // musí byť úplne prvé
 
 import { useColorScheme } from "@/components/useColorScheme";
@@ -14,6 +13,7 @@ import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
+import { Text, TextInput } from "react-native";
 
 export { ErrorBoundary } from "expo-router";
 
@@ -25,7 +25,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
-    SpaceMono: require("../../assets/fonts/SpaceMono-Regular.ttf"),
+    Inter: require("../../assets/fonts/Inter-VariableFont_opsz,wght.ttf"),
     ...FontAwesome.font,
   });
 
@@ -35,6 +35,20 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (!loaded) return;
+
+    // ✅ Globálne nastavenie fontu
+    Text.defaultProps = Text.defaultProps || {};
+    Text.defaultProps.style = [
+      { fontFamily: "Inter" },
+      Text.defaultProps.style,
+    ];
+
+    TextInput.defaultProps = TextInput.defaultProps || {};
+    TextInput.defaultProps.style = [
+      { fontFamily: "Inter" },
+      TextInput.defaultProps.style,
+    ];
+
     SplashScreen.hideAsync().catch(() => {});
   }, [loaded]);
 
@@ -54,7 +68,6 @@ function RootLayoutNav() {
             screenOptions={{
               headerShown: false,
               gestureEnabled: false,
-              animationEnabled: false,
             }}
           >
             <Stack.Screen name="(user)" />
@@ -65,7 +78,6 @@ function RootLayoutNav() {
               options={{
                 presentation: "modal",
                 gestureEnabled: false,
-                animationEnabled: false,
               }}
             />
           </Stack>

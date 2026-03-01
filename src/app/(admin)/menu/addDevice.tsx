@@ -1,4 +1,6 @@
+import Colors from "@/constants/Colors";
 import { supabase } from "@/lib/supabase";
+import { useLanguage } from "@/providers/LanguageProvider";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -13,7 +15,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -47,6 +49,8 @@ function SelectField({
   loading,
   onChange,
   onRetry,
+  emptyText,
+  retryText,
 }: {
   placeholder: string;
   value: Option | null;
@@ -54,6 +58,8 @@ function SelectField({
   loading?: boolean;
   onChange: (opt: Option) => void;
   onRetry?: () => void;
+  emptyText: string;
+  retryText: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -64,7 +70,7 @@ function SelectField({
         onPress={() => !loading && setOpen(true)}
       >
         <Text style={[styles.selectText, !value && styles.placeholderText]}>
-          {loading ? "Načítavam..." : value ? value.label : placeholder}
+          {loading ? placeholder : value ? value.label : placeholder}
         </Text>
         {loading ? <ActivityIndicator /> : <ChevronDown />}
       </Pressable>
@@ -84,13 +90,13 @@ function SelectField({
 
             {options.length === 0 ? (
               <View style={{ padding: 12 }}>
-                <Text style={{ color: "#444" }}>Žiadne položky.</Text>
+                <Text style={{ color: "#444" }}>{emptyText}</Text>
                 {onRetry && (
                   <Pressable
                     style={[styles.smallBtn, { marginTop: 12 }]}
                     onPress={onRetry}
                   >
-                    <Text style={styles.smallBtnText}>Obnoviť</Text>
+                    <Text style={styles.smallBtnText}>{retryText}</Text>
                   </Pressable>
                 )}
               </View>
@@ -122,6 +128,10 @@ function SelectField({
 }
 
 export default function NewDeviceScreen() {
+  const { t } = useLanguage();
+
+  const ORANGE = Colors.orange?.background ?? "#F28C28";
+
   const [loadingDevices, setLoadingDevices] = useState(true);
   const [loadingOrgs, setLoadingOrgs] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -208,7 +218,7 @@ export default function NewDeviceScreen() {
       if (selectedDevice && !opts.some((o) => o.value === selectedDevice.value))
         setSelectedDevice(null);
     } catch (e: any) {
-      setError(e?.message ?? "Nepodarilo sa načítať dostupné zariadenia.");
+      setError(e?.message ?? t("errorLoadAvailableDevices"));
     } finally {
       setLoadingDevices(false);
     }
@@ -230,7 +240,7 @@ export default function NewDeviceScreen() {
 
       const opts: Option[] = rows.map((o) => ({
         value: String(o.id),
-        label: o.nazov_org ?? `Organisation #${o.id}`,
+        label: o.nazov_org ?? `${t("organisationHash")} ${o.id}`,
       }));
 
       setOrgOptions(opts);
@@ -238,7 +248,7 @@ export default function NewDeviceScreen() {
       if (selectedOrg && !opts.some((o) => o.value === selectedOrg.value))
         setSelectedOrg(null);
     } catch (e: any) {
-      setError(e?.message ?? "Nepodarilo sa načítať organizácie.");
+      setError(e?.message ?? t("errorLoadOrganisations"));
     } finally {
       setLoadingOrgs(false);
     }
@@ -258,7 +268,7 @@ export default function NewDeviceScreen() {
 
       setCountries((data ?? []) as CountryRow[]);
     } catch (e: any) {
-      setError(e?.message ?? "Nepodarilo sa načítať krajiny (policy/RLS?).");
+      setError(e?.message ?? t("errorLoadCountries"));
       setCountries([]);
     } finally {
       setCountriesLoading(false);
@@ -278,7 +288,7 @@ export default function NewDeviceScreen() {
     const p_org_id = Number(selectedOrg.value);
 
     if (!Number.isFinite(p_org_id)) {
-      setError("Neplatná organizácia.");
+      setError(t("invalidOrganisation"));
       return;
     }
 
@@ -315,20 +325,20 @@ export default function NewDeviceScreen() {
       // refresh available devices (to reflect that device got assigned)
       await loadAvailableDevices();
 
-      Alert.alert("Hotovo", `Kontajner bol pridaný (bin id: ${binId}).`);
+      Alert.alert(t("doneTitle"), `${t("binCreated")} (bin id: ${binId}).`);
     } catch (e: any) {
-      const raw = e?.message ?? "Nepodarilo sa uložiť kontajner.";
+      const raw = e?.message ?? t("errorSaveBin");
 
       let friendly = raw;
       if (typeof raw === "string") {
         const lower = raw.toLowerCase();
         if (lower.includes("already assigned")) {
-          friendly = "Toto zariadenie už je priradené v inom kontajneri.";
+          friendly = t("deviceAlreadyAssigned");
           await loadAvailableDevices();
         } else if (lower.includes("country not found")) {
-          friendly = "Krajina nebola nájdená v DB (country_name mismatch).";
+          friendly = t("countryNotFound");
         } else if (lower.includes("row-level security")) {
-          friendly = "Nemáš práva na vytvorenie záznamu (RLS).";
+          friendly = t("noPermissionsRls");
         }
       }
 
@@ -347,7 +357,7 @@ export default function NewDeviceScreen() {
 
   const countryLabel = selectedCountry
     ? `${selectedCountry.country_name} (${selectedCountry.iso2})`
-    : "Vybrať krajinu";
+    : t("pickCountry");
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -359,54 +369,64 @@ export default function NewDeviceScreen() {
           contentContainerStyle={styles.container}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.title}>Nový kontajner</Text>
+          <Text style={styles.title}>{t("newBinTitle")}</Text>
 
           {error ? (
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>{error}</Text>
               <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
                 <Pressable style={styles.smallBtn} onPress={loadOrganisations}>
-                  <Text style={styles.smallBtnText}>Orgy</Text>
+                  <Text style={styles.smallBtnText}>{t("retryOrgs")}</Text>
                 </Pressable>
                 <Pressable
                   style={styles.smallBtn}
                   onPress={loadAvailableDevices}
                 >
-                  <Text style={styles.smallBtnText}>Zariadenia</Text>
+                  <Text style={styles.smallBtnText}>{t("retryDevices")}</Text>
                 </Pressable>
                 <Pressable style={styles.smallBtn} onPress={loadCountries}>
-                  <Text style={styles.smallBtnText}>Krajiny</Text>
+                  <Text style={styles.smallBtnText}>{t("retryCountries")}</Text>
                 </Pressable>
               </View>
             </View>
           ) : null}
 
-          <Text style={styles.sectionLabel}>Organizácia</Text>
+          <Text style={styles.sectionLabel}>{t("organisation")}</Text>
           <SelectField
-            placeholder="Vybrať organizáciu"
+            placeholder={
+              loadingOrgs ? t("loading") : t("pickOrganisationPlaceholder")
+            }
             value={selectedOrg}
             options={orgOptions}
             loading={loadingOrgs}
             onChange={setSelectedOrg}
             onRetry={loadOrganisations}
+            emptyText={t("noItems")}
+            retryText={t("refresh")}
           />
 
-          <Text style={styles.sectionLabel}>Zariadenie</Text>
+          <Text style={styles.sectionLabel}>{t("device")}</Text>
           <SelectField
-            placeholder="Vybrať dostupné zariadenie"
+            placeholder={
+              loadingDevices
+                ? t("loading")
+                : t("pickAvailableDevicePlaceholder")
+            }
             value={selectedDevice}
             options={deviceOptions}
             loading={loadingDevices}
             onChange={setSelectedDevice}
             onRetry={loadAvailableDevices}
+            emptyText={t("noItems")}
+            retryText={t("refresh")}
           />
 
-          <Text style={styles.sectionLabel}>Adresa</Text>
+          <Text style={styles.sectionLabel}>{t("address")}</Text>
 
           <TextInput
             value={street}
             onChangeText={setStreet}
-            placeholder="Ulica a číslo"
+            placeholder={t("streetAndNumber")}
             placeholderTextColor="#9AA0A6"
             style={styles.input}
           />
@@ -414,7 +434,7 @@ export default function NewDeviceScreen() {
           <TextInput
             value={city}
             onChangeText={setCity}
-            placeholder="Mesto"
+            placeholder={t("city")}
             placeholderTextColor="#9AA0A6"
             style={styles.input}
           />
@@ -431,7 +451,7 @@ export default function NewDeviceScreen() {
               ]}
               numberOfLines={1}
             >
-              {countriesLoading ? "Načítavam..." : countryLabel}
+              {countriesLoading ? t("loading") : countryLabel}
             </Text>
             {countriesLoading ? <ActivityIndicator /> : <ChevronDown />}
           </Pressable>
@@ -450,27 +470,29 @@ export default function NewDeviceScreen() {
                 style={styles.modalCard}
                 onPress={(e) => e.stopPropagation()}
               >
-                <Text style={styles.modalTitle}>Vyber krajinu</Text>
+                <Text style={styles.modalTitle}>{t("pickCountryTitle")}</Text>
 
                 <View style={styles.searchBox}>
                   <TextInput
                     value={countrySearch}
                     onChangeText={setCountrySearch}
-                    placeholder="Hľadať (názov, ISO2, ISO3)"
+                    placeholder={t("countrySearchPlaceholder")}
                     placeholderTextColor="#9AA0A6"
                     style={styles.searchInput}
+                    autoCorrect={false}
+                    autoCapitalize="none"
                   />
                   <Text style={{ fontSize: 16 }}>🔎</Text>
                 </View>
 
                 {filteredCountries.length === 0 ? (
                   <View style={{ padding: 12 }}>
-                    <Text style={{ color: "#444" }}>Žiadne položky.</Text>
+                    <Text style={{ color: "#444" }}>{t("noItems")}</Text>
                     <Pressable
                       style={[styles.smallBtn, { marginTop: 12 }]}
                       onPress={refreshCountries}
                     >
-                      <Text style={styles.smallBtnText}>Obnoviť</Text>
+                      <Text style={styles.smallBtnText}>{t("refresh")}</Text>
                     </Pressable>
                   </View>
                 ) : (
@@ -508,6 +530,7 @@ export default function NewDeviceScreen() {
           <Pressable
             style={({ pressed }) => [
               styles.primaryBtn,
+              { backgroundColor: ORANGE },
               (!canSubmit || submitting) && { opacity: 0.5 },
               pressed && canSubmit && !submitting ? { opacity: 0.85 } : null,
             ]}
@@ -517,7 +540,7 @@ export default function NewDeviceScreen() {
             {submitting ? (
               <ActivityIndicator />
             ) : (
-              <Text style={styles.primaryBtnText}>Uložiť</Text>
+              <Text style={styles.primaryBtnText}>{t("save")}</Text>
             )}
           </Pressable>
 
@@ -530,7 +553,6 @@ export default function NewDeviceScreen() {
 
 const BORDER = "#DADCE0";
 const TEXT = "#111";
-const ORANGE = "#F28C28";
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
@@ -588,7 +610,6 @@ const styles = StyleSheet.create({
     marginTop: 18,
     height: 56,
     borderRadius: 14,
-    backgroundColor: ORANGE,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -610,12 +631,15 @@ const styles = StyleSheet.create({
   smallBtn: {
     alignSelf: "flex-start",
     borderWidth: 1.5,
-    borderColor: ORANGE,
+    borderColor: Colors.orange?.background ?? "#F28C28",
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  smallBtnText: { color: ORANGE, fontWeight: "800" },
+  smallBtnText: {
+    color: Colors.orange?.background ?? "#F28C28",
+    fontWeight: "800",
+  },
 
   modalBackdrop: {
     flex: 1,

@@ -9,7 +9,6 @@ import {
   Animated,
   DevSettings,
   Dimensions,
-  Image,
   Modal,
   PanResponder,
   Pressable,
@@ -41,16 +40,13 @@ type Bin = {
 };
 
 /* =====================
-   RESPONSIVE HELPERS (len width/height)
+   RESPONSIVE HELPERS
 ===================== */
 const { width: W, height: H } = Dimensions.get("window");
 const vw = (p: number) => (W * p) / 100;
 const vh = (p: number) => (H * p) / 100;
 const fs = (b: number) => Math.max(12, (b * W) / 375);
 
-/* =====================
-   COMPONENT
-===================== */
 export default function TabTwoScreen() {
   const { session } = useAuth();
   const userEmail = session?.user?.email ?? "—";
@@ -59,7 +55,6 @@ export default function TabTwoScreen() {
 
   const [organizationName, setOrganizationName] = useState("—");
   const [loading, setLoading] = useState(true);
-
   const [refreshing, setRefreshing] = useState(false);
 
   const [deviceStatus, setDeviceStatus] = useState<DeviceStatus>({
@@ -286,7 +281,7 @@ export default function TabTwoScreen() {
   };
 
   /* =====================
-     JOIN COMPANY RPC (WAIT + RELOAD)
+     JOIN COMPANY RPC
   ===================== */
   const handleJoinCompany = async () => {
     const code = joinCode.trim().toUpperCase();
@@ -316,7 +311,8 @@ export default function TabTwoScreen() {
     }
 
     if (!newOrgId || newOrgId === beforeOrgId) {
-      setJoinError("K tejto Organizácii si už pripojený");
+      // ⚠️ pridaj si key: alreadyJoinedOrg do dict (sk/en)
+      setJoinError(t("alreadyJoinedOrg"));
       setJoinMounted(true);
       joinY.setValue(0);
       setJoinVisible(true);
@@ -372,7 +368,7 @@ export default function TabTwoScreen() {
         return;
       }
 
-      setOrganizationName(bins[0]?.nazov_org ?? "Neznáma organizácia");
+      setOrganizationName(bins[0]?.nazov_org ?? t("unknownOrganisation"));
 
       setDeviceStatus({
         onlineCount: bins.filter((b) => b.status === "online").length,
@@ -401,9 +397,6 @@ export default function TabTwoScreen() {
     }
   };
 
-  /* =====================
-     UI
-  ===================== */
   return (
     <ScrollView
       style={{ flex: 1, width: "100%" }}
@@ -415,40 +408,30 @@ export default function TabTwoScreen() {
       }
       keyboardShouldPersistTaps="handled"
     >
-      {/* HEADER */}
-      <View style={styles.header}>
-        <Image
-          source={require("@assets/images/logo.png")}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-        <TouchableOpacity onPress={() => router.replace("/(user)/menu")}>
-          <Text style={styles.close}>✕</Text>
-        </TouchableOpacity>
-      </View>
-
       {refreshing && (
         <View style={styles.refreshRow}>
           <ActivityIndicator />
-          <Text style={styles.refreshText}>Reloadujem…</Text>
+          <Text style={styles.refreshText}>{t("reloading")}</Text>
         </View>
       )}
 
       <Text style={styles.section}>{t("options")}</Text>
 
       <Text style={styles.organization}>
-        {loading ? "Načítavam…" : organizationName}
+        {loading ? t("loading") : organizationName}
       </Text>
 
-      <TouchableOpacity style={styles.listItem}>
+      {/* ACCOUNT */}
+      <TouchableOpacity style={styles.listItem} activeOpacity={0.8}>
         <View>
-          <Text style={styles.listTitle}>Účet</Text>
+          <Text style={styles.listTitle}>{t("account")}</Text>
           <Text style={styles.listSubtitle}>{userEmail}</Text>
         </View>
         <Text style={styles.chevron}>›</Text>
       </TouchableOpacity>
+
       {/* DEVICES */}
-      <TouchableOpacity style={styles.listItem}>
+      <TouchableOpacity style={styles.listItem} activeOpacity={0.8}>
         <View>
           <Text style={styles.listTitle}>{t("devices")}</Text>
           <Text style={styles.listSubtitle}>
@@ -464,6 +447,7 @@ export default function TabTwoScreen() {
         style={styles.listItem}
         onPress={openNotifications}
         disabled={isClosing}
+        activeOpacity={0.8}
       >
         <View>
           <Text style={styles.listTitle}>{t("notifications")}</Text>
@@ -477,6 +461,7 @@ export default function TabTwoScreen() {
         style={styles.listItem}
         onPress={openJoin}
         disabled={isClosing}
+        activeOpacity={0.8}
       >
         <View>
           <Text style={styles.listTitle}>{t("joinCompany")}</Text>
@@ -490,6 +475,7 @@ export default function TabTwoScreen() {
         style={styles.listItem}
         onPress={openLang}
         disabled={isClosing}
+        activeOpacity={0.8}
       >
         <View>
           <Text style={styles.listTitle}>{t("language")}</Text>
@@ -505,19 +491,18 @@ export default function TabTwoScreen() {
         style={[styles.listItem, styles.logoutItem]}
         onPress={handleLogout}
         disabled={isClosing}
+        activeOpacity={0.8}
       >
         <View>
           <Text style={[styles.listTitle, styles.logoutTitle]}>
-            Odhlásiť sa
+            {t("logout")}
           </Text>
-          <Text style={styles.listSubtitle}>Odhlásiť sa z účtu</Text>
+          <Text style={styles.listSubtitle}>{t("logoutSubtitle")}</Text>
         </View>
         <Text style={[styles.chevron, styles.logoutChevron]}>›</Text>
       </TouchableOpacity>
 
-      {/* =====================
-         NOTIFICATIONS SHEET
-      ===================== */}
+      {/* NOTIFICATIONS SHEET */}
       {notificationsMounted && (
         <Modal
           visible={notificationsVisible}
@@ -570,9 +555,7 @@ export default function TabTwoScreen() {
         </Modal>
       )}
 
-      {/* =====================
-         JOIN COMPANY SHEET
-      ===================== */}
+      {/* JOIN COMPANY SHEET */}
       {joinMounted && (
         <Modal
           visible={joinVisible}
@@ -614,6 +597,7 @@ export default function TabTwoScreen() {
                 style={styles.joinButton}
                 onPress={handleJoinCompany}
                 disabled={joinLoading}
+                activeOpacity={0.85}
               >
                 {joinLoading ? (
                   <ActivityIndicator color="white" />
@@ -628,9 +612,7 @@ export default function TabTwoScreen() {
         </Modal>
       )}
 
-      {/* =====================
-         LANGUAGE SHEET
-      ===================== */}
+      {/* LANGUAGE SHEET */}
       {langMounted && (
         <Modal
           visible={langVisible}
@@ -658,6 +640,7 @@ export default function TabTwoScreen() {
               <TouchableOpacity
                 style={[styles.langRow, lang === "sk" && styles.langRowActive]}
                 onPress={() => handleChangeLanguage("sk")}
+                activeOpacity={0.85}
               >
                 <Text style={styles.langText}>{t("slovak")}</Text>
                 <Text style={styles.langCheck}>{lang === "sk" ? "✓" : ""}</Text>
@@ -666,6 +649,7 @@ export default function TabTwoScreen() {
               <TouchableOpacity
                 style={[styles.langRow, lang === "en" && styles.langRowActive]}
                 onPress={() => handleChangeLanguage("en")}
+                activeOpacity={0.85}
               >
                 <Text style={styles.langText}>{t("english")}</Text>
                 <Text style={styles.langCheck}>{lang === "en" ? "✓" : ""}</Text>
@@ -681,7 +665,7 @@ export default function TabTwoScreen() {
 }
 
 /* =====================
-   STYLES (responsive len cez width/height)
+   STYLES
 ===================== */
 const styles = StyleSheet.create({
   container: {
@@ -690,22 +674,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "white",
     paddingBottom: vh(3),
-  },
-
-  header: {
-    width: "100%",
-    paddingTop: vh(1.2),
-    paddingHorizontal: vw(6.5),
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  close: { fontSize: fs(28), fontWeight: "bold" },
-
-  logo: {
-    width: Math.max(vw(12), 42),
-    height: Math.max(vw(12), 42),
   },
 
   refreshRow: {
