@@ -30,14 +30,14 @@ type DeviceRow = {
 
 type Tank = {
   tank_id: number;
-  level: number; // ✅ vždy number 0..100
+  level: number; // 0..100
 };
 
 type DeviceItem = {
   device_id: string;
   device_name: string;
   status: string;
-  tanks: Tank[]; // ✅ vždy 4 tanky
+  tanks: Tank[]; // vždy 4
 };
 
 const TANK_TYPE_KEYS: Record<
@@ -68,7 +68,6 @@ const firstParam = (v: string | string[] | undefined) =>
   Array.isArray(v) ? v[0] : v;
 
 const clampPercent = (v: unknown): number => {
-  // zvládne number, "42", "42.5", null, undefined
   const n = Number(v ?? 0);
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.min(100, n));
@@ -111,7 +110,7 @@ export default function StreetDevicesScreen() {
       if (!silent) setLoading(true);
       setError(null);
 
-      // 1) devices
+      // 1) devices na ulici pre danú org
       const { data: devData, error: devErr } = await supabase
         .from("bin_full_info")
         .select("device_id, device_name, status")
@@ -124,21 +123,12 @@ export default function StreetDevicesScreen() {
       const devRows = (devData ?? []) as DeviceRow[];
       const deviceIds = devRows.map((d) => String(d.device_id));
 
-      // DEBUG: zistíš, či vôbec niečo fetchuješ
-      // eslint-disable-next-line no-console
-      console.log("USER DEVICES DEBUG", {
-        city,
-        street,
-        orgId,
-        count: deviceIds.length,
-      });
-
       if (deviceIds.length === 0) {
         setDevices([]);
         return;
       }
 
-      // 2) tank_status pre všetky deviceIds naraz
+      // 2) tank_status pre všetky devices naraz
       const { data: tankData, error: tankErr } = await supabase
         .from("tank_status")
         .select("device_id, tank_id, level")
@@ -148,14 +138,7 @@ export default function StreetDevicesScreen() {
 
       const tankRows = (tankData ?? []) as TankRow[];
 
-      // DEBUG: ak je 0, je to RLS/join problém
-      // eslint-disable-next-line no-console
-      console.log("USER TANKS DEBUG", {
-        tankRows: tankRows.length,
-        sample: tankRows.slice(0, 3),
-      });
-
-      // group tanks
+      // group tanks by device
       const tanksByDevice = new Map<string, Tank[]>();
       for (const tr of tankRows) {
         const did = String(tr.device_id);
@@ -167,13 +150,14 @@ export default function StreetDevicesScreen() {
         tanksByDevice.set(did, arr);
       }
 
+      // merge
       const merged: DeviceItem[] = devRows.map((d) => {
         const did = String(d.device_id);
         const raw = tanksByDevice.get(did) ?? [];
         return {
           device_id: did,
           device_name: (d.device_name ?? "Bez názvu").toString(),
-          status: (d.status ?? "unknown").toString(),
+          status: (d.status ?? "offline").toString(),
           tanks: normalizeTanks(raw),
         };
       });
@@ -247,44 +231,97 @@ export default function StreetDevicesScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         contentContainerStyle={{ paddingBottom: vh(3) }}
-        renderItem={({ item }) => (
-          <Pressable style={styles.card}>
-            <Text style={styles.deviceName}>{item.device_name}</Text>
-            <Text style={styles.statusText}>
-              {t("statusLabel")}: {item.status}
-            </Text>
+        renderItem={({ item }) => {
+          const isOnline = item.status === "online";
 
-            <View style={styles.progressRow}>
-              {item.tanks.map((tank) => {
-                const fill = tank.level; // ✅ už je clampnuté
-                const color = TANK_COLORS[tank.tank_id] ?? "#FF9627";
-                const labelKey = TANK_TYPE_KEYS[tank.tank_id] ?? "tankMixed";
+          return (
+            <Pressable
+              style={[
+                styles.card,
+                isOnline ? styles.cardOnline : styles.cardOffline,
+              ]}
+            >
+              <View style={styles.cardTopRow}>
+                <Text
+                  style={[styles.deviceName, !isOnline && styles.offlineText]}
+                >
+                  {item.device_name}
+                </Text>
 
-                return (
-                  <View key={tank.tank_id} style={styles.progressItem}>
-                    <AnimatedCircularProgress
-                      size={circleSize}
-                      width={circleWidth}
-                      fill={fill}
-                      tintColor={color}
-                      backgroundColor="#FFE5B4"
-                      rotation={0}
-                      lineCap="round"
-                    >
-                      {() => (
-                        <Text style={{ fontSize: fs(12), fontWeight: "900" }}>
-                          {fill}%
-                        </Text>
-                      )}
-                    </AnimatedCircularProgress>
+                <View style={styles.statusPill}>
+                  <View
+                    style={[
+                      styles.statusDot,
+                      isOnline ? styles.dotOnline : styles.dotOffline,
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.statusPillText,
+                      !isOnline && styles.offlineText,
+                    ]}
+                  >
+                    {isOnline ? "Online" : "Offline"}
+                  </Text>
+                </View>
+              </View>
 
-                    <Text style={styles.tankLabel}>{t(labelKey)}</Text>
-                  </View>
-                );
-              })}
-            </View>
-          </Pressable>
-        )}
+              <Text
+                style={[styles.statusText, !isOnline && styles.offlineSubText]}
+              >
+                {t("statusLabel")}: {item.status}
+              </Text>
+
+              <View
+                style={[styles.progressRow, !isOnline && styles.offlineRow]}
+              >
+                {item.tanks.map((tank) => {
+                  const fill = tank.level;
+
+                  const color = isOnline
+                    ? (TANK_COLORS[tank.tank_id] ?? "#FF9627")
+                    : "#BDBDBD";
+
+                  const labelKey = TANK_TYPE_KEYS[tank.tank_id] ?? "tankMixed";
+
+                  return (
+                    <View key={tank.tank_id} style={styles.progressItem}>
+                      <AnimatedCircularProgress
+                        size={circleSize}
+                        width={circleWidth}
+                        fill={fill}
+                        tintColor={color}
+                        backgroundColor={isOnline ? "#FFE5B4" : "#E6E6E6"}
+                        rotation={0}
+                        lineCap="round"
+                      >
+                        {() => (
+                          <Text
+                            style={[
+                              { fontSize: fs(12), fontWeight: "900" },
+                              !isOnline && styles.offlineText,
+                            ]}
+                          >
+                            {fill}%
+                          </Text>
+                        )}
+                      </AnimatedCircularProgress>
+
+                      <Text
+                        style={[
+                          styles.tankLabel,
+                          !isOnline && styles.offlineSubText,
+                        ]}
+                      >
+                        {t(labelKey)}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </Pressable>
+          );
+        }}
         ListEmptyComponent={
           <View style={{ paddingTop: 40, alignItems: "center" }}>
             <Text style={{ color: "#777", fontWeight: "600" }}>
@@ -301,7 +338,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: vw(4),
-    paddingTop: vh(2),
+    paddingTop: 10,
+    gap: 20,
     backgroundColor: "white",
   },
   centered: { flex: 1, justifyContent: "center", alignItems: "center" },
@@ -317,14 +355,15 @@ const styles = StyleSheet.create({
   retryBtnText: { color: "#fff", fontWeight: "900" },
 
   searchInput: {
-    height: vh(8),
-    borderRadius: vw(2),
-    borderWidth: 1,
-    borderColor: "#E2E2E2",
-    paddingHorizontal: vw(4),
-    fontSize: fs(16),
+    height: Math.max(vh(6.2), 46),
     backgroundColor: "#F6F6F6",
-    marginBottom: vh(1.5),
+    borderRadius: Math.max(vw(2.2), 8),
+    borderColor: "#E2E2E2",
+    borderWidth: 1,
+    paddingHorizontal: vw(4.2),
+    marginTop: vh(1.6),
+    color: "black",
+    fontSize: fs(16),
   },
 
   header: {
@@ -343,6 +382,55 @@ const styles = StyleSheet.create({
     marginBottom: vh(1.5),
   },
 
+  cardOnline: {
+    backgroundColor: "white",
+  },
+
+  cardOffline: {
+    backgroundColor: "#F3F3F3",
+    opacity: 0.85,
+  },
+
+  cardTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 99,
+  },
+
+  dotOnline: {
+    backgroundColor: "#2ECC71",
+  },
+
+  dotOffline: {
+    backgroundColor: "#9E9E9E",
+  },
+
+  statusPillText: {
+    fontSize: fs(12),
+    fontWeight: "800",
+    color: "#111",
+  },
+
+  offlineText: {
+    color: "#777",
+  },
+
+  offlineSubText: {
+    color: "#888",
+  },
+
   deviceName: { fontSize: fs(18), fontWeight: "bold" },
   statusText: { fontSize: fs(14), color: "gray", marginTop: vh(0.5) },
 
@@ -350,6 +438,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: vh(1.5),
+  },
+
+  offlineRow: {
+    opacity: 0.9,
   },
 
   progressItem: {

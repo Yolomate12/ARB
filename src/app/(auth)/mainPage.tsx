@@ -15,7 +15,7 @@ export default function MainPage() {
       <View style={styles.content}>
         <Image
           style={styles.logo}
-          source={require("../../../assets/images/logo_des.png")}
+          source={require("../../../assets/images/logoObr.png")}
         />
         <View style={styles.containerText}>
           <Text style={styles.text}>

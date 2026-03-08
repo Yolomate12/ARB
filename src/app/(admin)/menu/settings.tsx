@@ -1,6 +1,8 @@
+import Colors from "@/constants/Colors";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/providers/AuthProvider";
 import { useLanguage } from "@/providers/LanguageProvider";
+import { Stack, useRouter } from "expo-router";
 import * as Updates from "expo-updates";
 import React, { useRef, useState } from "react";
 import {
@@ -8,6 +10,7 @@ import {
   Animated,
   DevSettings,
   Dimensions,
+  Image,
   Modal,
   PanResponder,
   Pressable,
@@ -25,10 +28,14 @@ const { width: W, height: H } = Dimensions.get("window");
 const vw = (p: number) => (W * p) / 100;
 const vh = (p: number) => (H * p) / 100;
 const fs = (b: number) => Math.max(12, (b * W) / 375);
+const clamp = (n: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, n));
+const s = (base: number) => clamp((base * W) / 375, base * 0.85, base * 1.25);
 
 export default function AdminSettings() {
   const { session } = useAuth();
   const userEmail = session?.user?.email ?? "—";
+  const router = useRouter();
   const { lang, setLang, t } = useLanguage();
 
   const [langVisible, setLangVisible] = useState(false);
@@ -133,113 +140,161 @@ export default function AdminSettings() {
   };
 
   return (
-    <ScrollView
-      style={{ flex: 1, width: "100%" }}
-      contentContainerStyle={styles.container}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Text style={styles.section}>{t("options")}</Text>
-      <Text style={styles.organization}>{t("adminAccount")}</Text>
-
-      {/* ACCOUNT */}
-      <TouchableOpacity style={styles.listItem} activeOpacity={0.8}>
-        <View>
-          <Text style={styles.listTitle}>{t("account")}</Text>
-          <Text style={styles.listSubtitle}>{userEmail}</Text>
-        </View>
-        <Text style={styles.chevron}>›</Text>
-      </TouchableOpacity>
-
-      {/* LANGUAGE */}
-      <TouchableOpacity
-        style={styles.listItem}
-        onPress={openLang}
-        disabled={isClosing}
-        activeOpacity={0.8}
-      >
-        <View>
-          <Text style={styles.listTitle}>{t("language")}</Text>
-          <Text style={styles.listSubtitle}>
-            {lang === "sk" ? t("slovak") : t("english")}
-          </Text>
-        </View>
-        <Text style={styles.chevron}>›</Text>
-      </TouchableOpacity>
-
-      {/* LOGOUT */}
-      <TouchableOpacity
-        style={[styles.listItem, styles.logoutItem]}
-        onPress={handleLogout}
-        disabled={isClosing || logoutLoading}
-        activeOpacity={0.8}
-      >
-        <View style={{ paddingRight: 10 }}>
-          <Text style={[styles.listTitle, styles.logoutTitle]}>
-            {t("logout")}
-          </Text>
-          <Text style={styles.listSubtitle}>{t("logoutSubtitle")}</Text>
-        </View>
-
-        {logoutLoading ? (
-          <ActivityIndicator />
-        ) : (
-          <Text style={[styles.chevron, styles.logoutChevron]}>›</Text>
-        )}
-      </TouchableOpacity>
-
-      {/* LANGUAGE SHEET */}
-      {langMounted && (
-        <Modal
-          visible={langVisible}
-          animationType="none"
-          transparent
-          onRequestClose={closeLang}
-        >
-          <View
-            style={styles.modalWrapper}
-            pointerEvents={isClosing ? "none" : "auto"}
-          >
-            <Pressable style={{ flex: 1 }} onPress={closeLang} />
-
-            <Animated.View
-              style={[
-                styles.bottomModalBox,
-                { transform: [{ translateY: langY }] },
-              ]}
+    <>
+      <Stack.Screen
+        options={{
+          title: "",
+          headerShadowVisible: false,
+          headerLeft: () => (
+            <View style={styles.headerItem}>
+              <Image
+                source={require("@assets/images/logo.png")}
+                style={styles.logo}
+              />
+            </View>
+          ),
+          headerRight: () => (
+            <Pressable
+              hitSlop={s(10)}
+              onPress={() =>
+                router.canGoBack() ? router.back() : router.replace("/(admin)")
+              }
             >
-              <View style={styles.handleTouchArea} {...langPan.panHandlers}>
-                <View style={styles.modalHandle} />
+              <View style={styles.headerItem}>
+                <View style={styles.closeIcon}>
+                  <View
+                    style={[
+                      styles.closeLine,
+                      { transform: [{ rotate: "45deg" }] },
+                    ]}
+                  />
+                  <View
+                    style={[
+                      styles.closeLine,
+                      { transform: [{ rotate: "-45deg" }] },
+                    ]}
+                  />
+                </View>
               </View>
+            </Pressable>
+          ),
+        }}
+      />
 
-              <Text style={styles.modalTitle}>{t("languageTitle")}</Text>
+      <ScrollView
+        style={{ flex: 1, width: "100%" }}
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={styles.section}>{t("options")}</Text>
+        <Text style={styles.organization}>{t("adminAccount")}</Text>
 
-              <TouchableOpacity
-                style={[styles.langRow, lang === "sk" && styles.langRowActive]}
-                onPress={() => handleChangeLanguage("sk")}
-                disabled={isClosing}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.langText}>{t("slovak")}</Text>
-                <Text style={styles.langCheck}>{lang === "sk" ? "✓" : ""}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.langRow, lang === "en" && styles.langRowActive]}
-                onPress={() => handleChangeLanguage("en")}
-                disabled={isClosing}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.langText}>{t("english")}</Text>
-                <Text style={styles.langCheck}>{lang === "en" ? "✓" : ""}</Text>
-              </TouchableOpacity>
-
-              <Text style={styles.joinHint}>{t("pullDownToClose")}</Text>
-            </Animated.View>
+        <TouchableOpacity style={styles.listItem} activeOpacity={0.8}>
+          <View>
+            <Text style={styles.listTitle}>{t("account")}</Text>
+            <Text style={styles.listSubtitle}>{userEmail}</Text>
           </View>
-        </Modal>
-      )}
-    </ScrollView>
+          <Text style={styles.chevron}>›</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.listItem}
+          onPress={openLang}
+          disabled={isClosing}
+          activeOpacity={0.8}
+        >
+          <View>
+            <Text style={styles.listTitle}>{t("language")}</Text>
+            <Text style={styles.listSubtitle}>
+              {lang === "sk" ? t("slovak") : t("english")}
+            </Text>
+          </View>
+          <Text style={styles.chevron}>›</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.listItem, styles.logoutItem]}
+          onPress={handleLogout}
+          disabled={isClosing || logoutLoading}
+          activeOpacity={0.8}
+        >
+          <View style={{ paddingRight: 10 }}>
+            <Text style={[styles.listTitle, styles.logoutTitle]}>
+              {t("logout")}
+            </Text>
+            <Text style={styles.listSubtitle}>{t("logoutSubtitle")}</Text>
+          </View>
+
+          {logoutLoading ? (
+            <ActivityIndicator />
+          ) : (
+            <Text style={[styles.chevron, styles.logoutChevron]}>›</Text>
+          )}
+        </TouchableOpacity>
+
+        {langMounted && (
+          <Modal
+            visible={langVisible}
+            animationType="none"
+            transparent
+            onRequestClose={closeLang}
+          >
+            <View
+              style={styles.modalWrapper}
+              pointerEvents={isClosing ? "none" : "auto"}
+            >
+              <Pressable style={{ flex: 1 }} onPress={closeLang} />
+
+              <Animated.View
+                style={[
+                  styles.bottomModalBox,
+                  { transform: [{ translateY: langY }] },
+                ]}
+              >
+                <View style={styles.handleTouchArea} {...langPan.panHandlers}>
+                  <View style={styles.modalHandle} />
+                </View>
+
+                <Text style={styles.modalTitle}>{t("languageTitle")}</Text>
+
+                <TouchableOpacity
+                  style={[
+                    styles.langRow,
+                    lang === "sk" && styles.langRowActive,
+                  ]}
+                  onPress={() => handleChangeLanguage("sk")}
+                  disabled={isClosing}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.langText}>{t("slovak")}</Text>
+                  <Text style={styles.langCheck}>
+                    {lang === "sk" ? "✓" : ""}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.langRow,
+                    lang === "en" && styles.langRowActive,
+                  ]}
+                  onPress={() => handleChangeLanguage("en")}
+                  disabled={isClosing}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.langText}>{t("english")}</Text>
+                  <Text style={styles.langCheck}>
+                    {lang === "en" ? "✓" : ""}
+                  </Text>
+                </TouchableOpacity>
+
+                <Text style={styles.joinHint}>{t("pullDownToClose")}</Text>
+              </Animated.View>
+            </View>
+          </Modal>
+        )}
+      </ScrollView>
+    </>
   );
 }
 
@@ -255,9 +310,17 @@ const styles = StyleSheet.create({
     paddingBottom: vh(3),
   },
 
-  section: { marginTop: vh(2.2), fontSize: fs(14), fontWeight: "bold" },
+  section: {
+    marginTop: vh(2.2),
+    fontSize: fs(14),
+    fontWeight: "bold",
+  },
 
-  organization: { marginTop: vh(1.4), fontSize: fs(18), fontWeight: "600" },
+  organization: {
+    marginTop: vh(1.4),
+    fontSize: fs(18),
+    fontWeight: "600",
+  },
 
   listItem: {
     width: "90%",
@@ -271,13 +334,26 @@ const styles = StyleSheet.create({
     marginTop: vh(1.2),
   },
 
-  listTitle: { fontSize: fs(16), fontWeight: "500" },
+  listTitle: {
+    fontSize: fs(16),
+    fontWeight: "500",
+  },
 
-  listSubtitle: { fontSize: fs(14), color: "#8E8E93", marginTop: vh(0.4) },
+  listSubtitle: {
+    fontSize: fs(14),
+    color: "#8E8E93",
+    marginTop: vh(0.4),
+  },
 
-  chevron: { fontSize: fs(24), color: "#C7C7CC" },
+  chevron: {
+    fontSize: fs(24),
+    color: "#C7C7CC",
+  },
 
-  modalWrapper: { flex: 1, justifyContent: "flex-end" },
+  modalWrapper: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
 
   bottomModalBox: {
     height: Math.max(vh(45), 360),
@@ -307,7 +383,11 @@ const styles = StyleSheet.create({
     marginBottom: vh(1.2),
   },
 
-  modalTitle: { fontSize: fs(18), fontWeight: "700", marginBottom: vh(1.4) },
+  modalTitle: {
+    fontSize: fs(18),
+    fontWeight: "700",
+    marginBottom: vh(1.4),
+  },
 
   langRow: {
     width: "100%",
@@ -322,11 +402,19 @@ const styles = StyleSheet.create({
     marginTop: vh(1.2),
   },
 
-  langRowActive: { borderColor: "#FF9627" },
+  langRowActive: {
+    borderColor: "#FF9627",
+  },
 
-  langText: { fontSize: fs(16), fontWeight: "600" },
+  langText: {
+    fontSize: fs(16),
+    fontWeight: "600",
+  },
 
-  langCheck: { fontSize: fs(18), fontWeight: "800" },
+  langCheck: {
+    fontSize: fs(18),
+    fontWeight: "800",
+  },
 
   joinHint: {
     marginTop: vh(1.6),
@@ -347,5 +435,34 @@ const styles = StyleSheet.create({
 
   logoutChevron: {
     color: "#FF3B30",
+  },
+
+  headerItem: {
+    height: s(40),
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: s(10),
+  },
+
+  logo: {
+    width: s(44),
+    height: s(44),
+    resizeMode: "contain",
+  },
+
+  closeIcon: {
+    width: s(24),
+    height: s(24),
+    justifyContent: "center",
+    alignItems: "center",
+    position: "relative",
+  },
+
+  closeLine: {
+    position: "absolute",
+    width: s(22),
+    height: s(4),
+    backgroundColor: Colors.orange.background,
+    borderRadius: s(20),
   },
 });

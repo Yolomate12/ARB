@@ -260,7 +260,7 @@ export default function CityListScreen() {
                 <View style={styles.rowContent}>
                   <View style={styles.leftBox}>
                     <FontAwesome
-                      name="map-marker"
+                      name="flag-o"
                       size={Math.round(vw(6.2))}
                       color="white"
                     />

@@ -24,7 +24,7 @@ export default function MenuStack() {
         ),
 
         headerRight: () => (
-          <Link href="/(user)/two" asChild>
+          <Link href="/(user)/menu/[city]/options/options" asChild>
             <Pressable hitSlop={s(10)}>
               <View style={styles.headerItem}>
                 <View style={styles.menuIcon}>

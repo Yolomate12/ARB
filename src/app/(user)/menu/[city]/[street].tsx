@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/providers/AuthProvider";
 import { useLanguage } from "@/providers/LanguageProvider";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { Link, useLocalSearchParams } from "expo-router";
@@ -27,14 +28,15 @@ const vh = (p: number) => (H * p) / 100;
 const fs = (base: number) => Math.max(12, (base * W) / 375);
 
 export default function StreetListScreen() {
+  const { profile } = useAuth();
   const { t } = useLanguage();
   const { city } = useLocalSearchParams<{ city: string }>();
 
   const [streets, setStreets] = useState<StreetItem[]>([]);
   const [filteredStreets, setFilteredStreets] = useState<StreetItem[]>([]);
   const [organisationName, setOrganisationName] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
 
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
@@ -42,67 +44,79 @@ export default function StreetListScreen() {
 
   const fetchData = async (opts?: { silent?: boolean }) => {
     if (!city) return;
+    if (!profile?.id_org) return;
 
     const silent = opts?.silent ?? false;
 
     if (!silent) setLoading(true);
     setError(null);
 
-    const { data, error } = await supabase
-      .from("bin_full_info")
-      .select("name_street, status, nazov_org")
-      .eq("name_city", city);
+    try {
+      // OPRAVA: filtrujeme aj podľa organizácie (rovnako ako CityListScreen)
+      const { data, error } = await supabase
+        .from("bin_full_info")
+        .select("name_street, status, nazov_org")
+        .eq("name_city", city)
+        .eq("id_org", profile.id_org);
 
-    if (error) {
-      setError(error.message);
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const firstOrg =
+          data.find(
+            (d: any) => d.nazov_org && String(d.nazov_org).trim() !== "",
+          )?.nazov_org ?? null;
+
+        setOrganisationName(firstOrg ?? profile.organisation ?? null);
+
+        const streetCounts: Record<
+          string,
+          { onlineCount: number; offlineCount: number }
+        > = {};
+
+        data.forEach((item: any) => {
+          if (!item.name_street) return;
+
+          if (!streetCounts[item.name_street]) {
+            streetCounts[item.name_street] = {
+              onlineCount: 0,
+              offlineCount: 0,
+            };
+          }
+
+          if (item.status === "online")
+            streetCounts[item.name_street].onlineCount += 1;
+          else streetCounts[item.name_street].offlineCount += 1;
+        });
+
+        const uniqueStreets: StreetItem[] = Object.entries(streetCounts)
+          .map(([name_street, counts]) => ({
+            name_street,
+            onlineCount: counts.onlineCount,
+            offlineCount: counts.offlineCount,
+          }))
+          .sort((a, b) => a.name_street.localeCompare(b.name_street, "sk"));
+
+        setStreets(uniqueStreets);
+        setFilteredStreets(uniqueStreets);
+      } else {
+        setOrganisationName(profile.organisation ?? null);
+        setStreets([]);
+        setFilteredStreets([]);
+      }
+    } catch (err: any) {
+      console.error("Error fetching streets:", err);
+      setError(err?.message || t("errorLoadingStreets"));
+    } finally {
       if (!silent) setLoading(false);
-      return;
     }
-
-    if (data && data.length > 0) {
-      const firstOrg = data.find((d: any) => d.nazov_org)?.nazov_org ?? null;
-      setOrganisationName(firstOrg);
-
-      const streetCounts: Record<
-        string,
-        { onlineCount: number; offlineCount: number }
-      > = {};
-
-      data.forEach((item: any) => {
-        if (!item.name_street) return;
-
-        if (!streetCounts[item.name_street]) {
-          streetCounts[item.name_street] = { onlineCount: 0, offlineCount: 0 };
-        }
-
-        if (item.status === "online")
-          streetCounts[item.name_street].onlineCount += 1;
-        else streetCounts[item.name_street].offlineCount += 1;
-      });
-
-      const uniqueStreets: StreetItem[] = Object.entries(streetCounts).map(
-        ([name_street, counts]) => ({
-          name_street,
-          onlineCount: counts.onlineCount,
-          offlineCount: counts.offlineCount,
-        }),
-      );
-
-      setStreets(uniqueStreets);
-      setFilteredStreets(uniqueStreets);
-    } else {
-      setStreets([]);
-      setFilteredStreets([]);
-      setOrganisationName(null);
-    }
-
-    if (!silent) setLoading(false);
   };
 
   useEffect(() => {
+    if (!profile?.id_org) return;
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [city]);
+  }, [city, profile?.id_org]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -123,6 +137,17 @@ export default function StreetListScreen() {
       streets.filter((s) => s.name_street.toLowerCase().includes(q)),
     );
   }, [search, streets]);
+
+  if (!profile) {
+    return (
+      <View style={[styles.center, { flex: 1 }]}>
+        <ActivityIndicator size="large" />
+        <Text style={{ marginTop: vh(1.2), color: "#FF9627" }}>
+          {t("loadingProfile")}
+        </Text>
+      </View>
+    );
+  }
 
   if (loading) {
     return (
@@ -178,6 +203,9 @@ export default function StreetListScreen() {
         </Text>
       </View>
 
+      <View style={{ paddingHorizontal: vw(5), paddingVertical: vw(2.4) }}>
+        <Text style={{ fontSize: 14, fontWeight: "bold" }}>Ulica</Text>
+      </View>
       {/* LIST */}
       <View style={styles.list}>
         {filteredStreets.map((street) => (
@@ -211,7 +239,7 @@ export default function StreetListScreen() {
           </Link>
         ))}
 
-        {!filteredStreets.length ? (
+        {!loading && !error && !filteredStreets.length ? (
           <View style={{ paddingVertical: vh(2.5) }}>
             <Text
               style={{
@@ -270,13 +298,14 @@ const styles = StyleSheet.create({
 
   searchInput: {
     height: Math.max(vh(6.2), 46),
-    fontSize: fs(16),
-    borderRadius: Math.max(vw(2.2), 8),
-    borderWidth: 1,
-    borderColor: "#E2E2E2",
-    paddingHorizontal: vw(4.2),
     backgroundColor: "#F6F6F6",
-    color: "#1E1E1E",
+    borderRadius: Math.max(vw(2.2), 8),
+    borderColor: "#E2E2E2",
+    borderWidth: 1,
+    paddingHorizontal: vw(4.2),
+    marginTop: vh(1.6),
+    color: "black",
+    fontSize: fs(16),
   },
 
   header: {
@@ -289,6 +318,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#1E1E1E",
     opacity: 0.5,
+    marginBottom: 10,
   },
 
   list: {

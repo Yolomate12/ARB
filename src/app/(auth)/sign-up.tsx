@@ -76,9 +76,9 @@ const SignUpScreen = () => {
       />
 
       <View style={styles.containerSignUp}>
-        <Text style={styles.textAccount}>Nemáte vytvorené konto?</Text>
+        <Text style={styles.textAccount}>Už máte vytvorené konto?</Text>
         <Link style={styles.link} href={"/(auth)/sign-in"}>
-          Vytvoriť učet
+          Prihlásiť sa{" "}
         </Link>
       </View>
     </View>

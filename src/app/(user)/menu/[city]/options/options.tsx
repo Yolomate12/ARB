@@ -6,20 +6,20 @@ import { Stack, useRouter } from "expo-router";
 import * as Updates from "expo-updates";
 import { useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Animated,
-  DevSettings,
-  Dimensions,
-  Modal,
-  PanResponder,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Animated,
+    DevSettings,
+    Dimensions,
+    Modal,
+    PanResponder,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from "react-native";
 
 /* =====================
@@ -705,7 +705,7 @@ export default function TabTwoScreen() {
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
-    paddingTop: vh(6),
+    paddingTop: vh(2),
     alignItems: "center",
     backgroundColor: "white",
     paddingBottom: vh(3),

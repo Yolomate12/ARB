@@ -1,4 +1,4 @@
-import "react-native-reanimated"; // musí byť úplne prvé
+import "react-native-reanimated";
 
 import { useColorScheme } from "@/components/useColorScheme";
 import AuthProvider from "@/providers/AuthProvider";
@@ -36,7 +36,6 @@ export default function RootLayout() {
   useEffect(() => {
     if (!loaded) return;
 
-    // ✅ Globálne nastavenie fontu
     Text.defaultProps = Text.defaultProps || {};
     Text.defaultProps.style = [
       { fontFamily: "Inter" },
@@ -71,13 +70,24 @@ function RootLayoutNav() {
             }}
           >
             <Stack.Screen name="(user)" />
-            <Stack.Screen name="(admin)" />
-            <Stack.Screen name="(auth)" />
+            <Stack.Screen
+              name="(admin)"
+              options={{
+                headerShown: false,
+              }}
+            />
+            <Stack.Screen
+              name="(auth)"
+              options={{
+                headerShown: false,
+              }}
+            />
             <Stack.Screen
               name="modal"
               options={{
                 presentation: "modal",
                 gestureEnabled: false,
+                headerShown: false,
               }}
             />
           </Stack>
