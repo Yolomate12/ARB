@@ -441,7 +441,7 @@ export default function AdminOrganizationsScreen() {
                   <ActivityIndicator color="#fff" />
                 ) : (
                   <Text style={styles.deleteBtnText}>
-                    {t("delete") || "Delete"}
+                    {t("DeleteOrg") || "Delete bin"}
                   </Text>
                 )}
               </Pressable>
@@ -452,6 +452,15 @@ export default function AdminOrganizationsScreen() {
     </View>
   );
 }
+
+const { width: W, height: H } = Dimensions.get("window");
+
+// helpers iba z width/height
+const vw = (p: number) => (W * p) / 100;
+const vh = (p: number) => (H * p) / 100;
+
+// jemná typografia viazaná len na width
+const fs = (base: number) => Math.max(12, (base * W) / 375);
 
 const styles = StyleSheet.create({
   container: {
@@ -475,22 +484,23 @@ const styles = StyleSheet.create({
   },
 
   searchBox: {
-    height: 44,
-    borderRadius: 10,
+    height: Math.max(vh(6.2), 46),
+    backgroundColor: "#F6F6F6",
+    borderRadius: Math.max(vw(2.2), 8),
+    borderColor: "#E2E2E2",
     borderWidth: 1,
-    borderColor: "#E6E6E6",
-    paddingHorizontal: 14,
+    paddingHorizontal: vw(4.2),
+    marginTop: vh(1.6),
+
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#fff",
   },
 
   searchInput: {
     flex: 1,
     marginRight: 10,
-    fontSize: 15,
-    color: "#111",
+    fontSize: fs(16),
+    color: "black",
   },
 
   card: {

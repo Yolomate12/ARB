@@ -40,13 +40,21 @@ type DeviceItem = {
   tanks: Tank[]; // vždy 4
 };
 
+const getTankColor = (value: number, isOnline: boolean) => {
+  if (!isOnline) return "#BDBDBD";
+
+  if (value <= 25) return "#2ECC71"; // zelená
+  if (value <= 79) return "#F7941D"; // oranžová
+  return "#FF3B30"; // červená
+};
+
 const TANK_TYPE_KEYS: Record<
   number,
-  "tankPlastic" | "tankPaper" | "tankGlass" | "tankMixed"
+  "tankPlastic" | "tankPaper" | "tankMetal" | "tankMixed"
 > = {
-  1: "tankPlastic",
+  1: "tankMetal",
   2: "tankPaper",
-  3: "tankGlass",
+  3: "tankPlastic",
   4: "tankMixed",
 };
 
@@ -275,12 +283,10 @@ export default function StreetDevicesScreen() {
               <View
                 style={[styles.progressRow, !isOnline && styles.offlineRow]}
               >
-                {item.tanks.map((tank) => {
-                  const fill = tank.level;
+                {normalizeTanks(item.tanks).map((tank) => {
+                  const fill = clampPercent(tank.level);
 
-                  const color = isOnline
-                    ? (TANK_COLORS[tank.tank_id] ?? "#FF9627")
-                    : "#BDBDBD";
+                  const color = getTankColor(fill, isOnline);
 
                   const labelKey = TANK_TYPE_KEYS[tank.tank_id] ?? "tankMixed";
 
@@ -361,7 +367,7 @@ const styles = StyleSheet.create({
     borderColor: "#E2E2E2",
     borderWidth: 1,
     paddingHorizontal: vw(4.2),
-    marginTop: vh(1.6),
+    //marginTop: vh(1.6),
     color: "black",
     fontSize: fs(16),
   },

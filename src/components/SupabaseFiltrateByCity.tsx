@@ -334,6 +334,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     paddingHorizontal: vw(4.2),
     marginTop: vh(1.6),
+
     color: "black",
     fontSize: fs(16),
   },

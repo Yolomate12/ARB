@@ -44,7 +44,7 @@ const dict = {
     errorLoadingDevices: "Chyba pri načítaní zariadení",
     tankPlastic: "Plast",
     tankPaper: "Papier",
-    tankGlass: "Sklo",
+    tankMetal: "Kov",
     tankMixed: "Komunál",
     tankUnknown: "Neznáme",
     noStreetsFound: "Nenašli sa žiadne ulice.",
@@ -150,11 +150,13 @@ const dict = {
     nothingDeletedBody:
       "Delete vrátil 0 riadkov. Skontroluj RLS policy na bin.",
     errorDeletingBin: "Nepodarilo sa vymazať z bin.",
-    removeBinFromOrg: "Odobrať kôš z organizácie",
+    removeBinFromOrg: "Odobrať Kôš",
+    DeleteOrg: "Odstrániť Org",
   },
 
   en: {
     // --- common / shared
+    DeleteOrg: "Delete Org",
     back: "Back",
     cancel: "Cancel",
     remove: "Remove",
@@ -185,7 +187,7 @@ const dict = {
     errorLoadingDevices: "Error while loading devices",
     tankPlastic: "Plastic",
     tankPaper: "Paper",
-    tankGlass: "Glass",
+    tankMetal: "Metal",
     tankMixed: "Mixed",
     tankUnknown: "Unknown",
     noStreetsFound: "No streets found.",
@@ -291,7 +293,7 @@ const dict = {
     nothingDeletedTitle: "Nothing deleted",
     nothingDeletedBody: "Delete returned 0 rows. Check your RLS policy on bin.",
     errorDeletingBin: "Failed to delete from bin.",
-    removeBinFromOrg: "Remove bin from organization",
+    removeBinFromOrg: "Remove bin ",
   },
 } as const;
 

@@ -2,13 +2,15 @@ import Colors from "@/constants/Colors";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/providers/LanguageProvider";
 import { Stack, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Dimensions,
   FlatList,
   Modal,
+  PanResponder,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -25,7 +27,7 @@ type Tank = {
 };
 
 type DeviceRow = {
-  bin_id: number; // z view bin_full_info
+  bin_id: number;
   device_id: string;
   device_name: string | null;
   status: string | null;
@@ -40,25 +42,33 @@ type DeviceItem = {
 };
 
 const ORANGE = Colors.orange?.background ?? "#F7941D";
+const SCREEN_HEIGHT = Dimensions.get("window").height;
 
 const { width: W, height: H } = Dimensions.get("window");
 const vw = (p: number) => (W * p) / 100;
 const vh = (p: number) => (H * p) / 100;
 const fs = (b: number) => Math.max(12, (b * W) / 375);
 
+const getTankColor = (value: number, isOnline: boolean) => {
+  if (!isOnline) return "#BDBDBD";
+
+  if (value <= 25) return "#2ECC71"; // zelená
+  if (value <= 79) return "#F7941D"; // oranžová
+  return "#FF3B30"; // červená
+};
 const TANK_TYPE_KEYS: Record<
   number,
-  "tankPlastic" | "tankPaper" | "tankGlass" | "tankMixed"
+  "tankPlastic" | "tankPaper" | "tankMetal" | "tankMixed"
 > = {
-  1: "tankPlastic",
+  1: "tankMetal",
   2: "tankPaper",
-  3: "tankGlass",
+  3: "tankPlastic",
   4: "tankMixed",
 };
 
 const TANK_COLORS: Record<number, string> = {
-  1: "#FFA500",
-  2: "#FFA500",
+  1: "#ffdd00",
+  2: "#0048ff",
   3: "#FFA500",
   4: "#FF0000",
 };
@@ -102,14 +112,76 @@ export default function AdminOrganisationDevicesScreen() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  // modal
   const [modalOpen, setModalOpen] = useState(false);
   const [selected, setSelected] = useState<DeviceItem | null>(null);
-  const [editName, setEditName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
 
   const circleSize = vw(18);
-  const circleWidth = vw(2);
+  const circleWidth = Math.max(2, vw(2));
+
+  const sheetY = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+
+  const openSheet = () => {
+    if (isClosing) return;
+
+    setModalOpen(true);
+    sheetY.setValue(SCREEN_HEIGHT);
+
+    Animated.timing(sheetY, {
+      toValue: 0,
+      duration: 250,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const closeSheet = () => {
+    if (isClosing || busy) return;
+
+    setIsClosing(true);
+
+    Animated.timing(sheetY, {
+      toValue: SCREEN_HEIGHT,
+      duration: 220,
+      useNativeDriver: true,
+    }).start(() => {
+      setModalOpen(false);
+      setSelected(null);
+      sheetY.setValue(SCREEN_HEIGHT);
+      setIsClosing(false);
+    });
+  };
+
+  const resetSheet = () => {
+    Animated.spring(sheetY, {
+      toValue: 0,
+      useNativeDriver: true,
+      bounciness: 4,
+    }).start();
+  };
+
+  const sheetPan = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_evt, g) =>
+        Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderMove: (_evt, g) => {
+        if (g.dy > 0) {
+          sheetY.setValue(g.dy);
+        }
+      },
+      onPanResponderRelease: (_evt, g) => {
+        if (g.dy > 120 || g.vy > 1.2) {
+          closeSheet();
+        } else {
+          resetSheet();
+        }
+      },
+      onPanResponderTerminate: () => {
+        resetSheet();
+      },
+    }),
+  ).current;
 
   const fetchDevices = async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent ?? false;
@@ -125,7 +197,6 @@ export default function AdminOrganisationDevicesScreen() {
       if (!silent) setLoading(true);
       setError(null);
 
-      // 1) devices/bins z view
       const { data: devData, error: devErr } = await supabase
         .from("bin_full_info")
         .select("bin_id, device_id, device_name, status")
@@ -141,7 +212,6 @@ export default function AdminOrganisationDevicesScreen() {
         return;
       }
 
-      // 2) tank status pre všetky zariadenia
       const { data: tankData, error: tankErr } = await supabase
         .from("tank_status")
         .select("device_id, tank_id, level")
@@ -169,7 +239,7 @@ export default function AdminOrganisationDevicesScreen() {
           bin_id: Number(d.bin_id),
           device_id: did,
           device_name: d.device_name ?? t("noName"),
-          status: d.status ?? "unknown",
+          status: (d.status ?? "offline").toString(),
           tanks: tanksByDevice.get(did) ?? [],
         };
       });
@@ -206,43 +276,12 @@ export default function AdminOrganisationDevicesScreen() {
 
   const openModal = (item: DeviceItem) => {
     setSelected(item);
-    setEditName(item.device_name);
-    setModalOpen(true);
+    openSheet();
   };
 
   const closeModal = () => {
-    if (busy) return;
-    setModalOpen(false);
-    setSelected(null);
-    setEditName("");
-  };
-
-  const saveEdit = async () => {
-    if (!selected) return;
-
-    const newName = editName.trim();
-    if (!newName) {
-      Alert.alert(t("errorTitle"), t("deviceNameEmpty"));
-      return;
-    }
-
-    try {
-      setBusy(true);
-
-      const { error: updErr } = await supabase
-        .from("devices")
-        .update({ name: newName })
-        .eq("id", selected.device_id);
-
-      if (updErr) throw updErr;
-
-      closeModal();
-      await fetchDevices({ silent: true });
-    } catch (e: any) {
-      Alert.alert(t("errorTitle"), e?.message ?? t("errorSavingChanges"));
-    } finally {
-      setBusy(false);
-    }
+    if (busy || isClosing) return;
+    closeSheet();
   };
 
   const deleteBin = async () => {
@@ -271,7 +310,7 @@ export default function AdminOrganisationDevicesScreen() {
               return;
             }
 
-            closeModal();
+            closeSheet();
             await fetchDevices({ silent: true });
           } catch (e: any) {
             Alert.alert(t("errorTitle"), e?.message ?? t("errorDeletingBin"));
@@ -330,108 +369,174 @@ export default function AdminOrganisationDevicesScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
         contentContainerStyle={{ paddingBottom: vh(3) }}
-        renderItem={({ item }) => (
-          <Pressable style={styles.card} onPress={() => openModal(item)}>
-            <Text style={styles.deviceName}>{item.device_name}</Text>
-            <Text style={styles.statusText}>
-              {t("statusLabel")}: {item.status}
-            </Text>
+        renderItem={({ item }) => {
+          const isOnline = item.status === "online";
 
-            <View style={styles.progressRow}>
-              {normalizeTanks(item.tanks).map((tank) => {
-                const fill = clampPercent(tank.level);
-                const labelKey = TANK_TYPE_KEYS[tank.tank_id] ?? "tankUnknown";
-                return (
-                  <View key={tank.tank_id} style={styles.progressItem}>
-                    <AnimatedCircularProgress
-                      size={circleSize}
-                      width={circleWidth}
-                      fill={fill}
-                      tintColor={TANK_COLORS[tank.tank_id] ?? ORANGE}
-                      backgroundColor="#FFE5B4"
-                    >
-                      {() => <Text style={{ fontSize: fs(12) }}>{fill}%</Text>}
-                    </AnimatedCircularProgress>
+          return (
+            <Pressable
+              style={[
+                styles.card,
+                isOnline ? styles.cardOnline : styles.cardOffline,
+              ]}
+              onPress={() => openModal(item)}
+            >
+              <View style={styles.cardTopRow}>
+                <Text
+                  style={[styles.deviceName, !isOnline && styles.offlineText]}
+                >
+                  {item.device_name}
+                </Text>
 
-                    <Text style={styles.tankLabel}>{t(labelKey)}</Text>
-                  </View>
-                );
-              })}
-            </View>
-          </Pressable>
-        )}
+                <View style={styles.statusPill}>
+                  <View
+                    style={[
+                      styles.statusDot,
+                      isOnline ? styles.dotOnline : styles.dotOffline,
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.statusPillText,
+                      !isOnline && styles.offlineText,
+                    ]}
+                  >
+                    {isOnline ? "Online" : "Offline"}
+                  </Text>
+                </View>
+              </View>
+
+              <Text
+                style={[styles.statusText, !isOnline && styles.offlineSubText]}
+              >
+                {t("statusLabel")}: {item.status}
+              </Text>
+
+              <View
+                style={[styles.progressRow, !isOnline && styles.offlineRow]}
+              >
+                {normalizeTanks(item.tanks).map((tank) => {
+                  const fill = clampPercent(tank.level);
+
+                  // 👇 TU JE ZMENA
+                  const color = getTankColor(fill, isOnline);
+
+                  const labelKey = TANK_TYPE_KEYS[tank.tank_id] ?? "tankMixed";
+
+                  return (
+                    <View key={tank.tank_id} style={styles.progressItem}>
+                      <AnimatedCircularProgress
+                        size={circleSize}
+                        width={circleWidth}
+                        fill={fill}
+                        tintColor={color}
+                        backgroundColor={isOnline ? "#FFE5B4" : "#E6E6E6"}
+                        rotation={0}
+                        lineCap="round"
+                      >
+                        {() => (
+                          <Text
+                            style={[
+                              styles.progressValue,
+                              !isOnline && styles.offlineText,
+                            ]}
+                          >
+                            {fill}%
+                          </Text>
+                        )}
+                      </AnimatedCircularProgress>
+
+                      <Text
+                        style={[
+                          styles.tankLabel,
+                          !isOnline && styles.offlineSubText,
+                        ]}
+                      >
+                        {t(labelKey)}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </Pressable>
+          );
+        }}
         ListEmptyComponent={
-          <View style={{ paddingTop: 40, alignItems: "center" }}>
-            <Text style={{ color: "#777", fontWeight: "600" }}>
-              {t("noDevicesInOrganisation")}
-            </Text>
+          <View style={styles.emptyWrap}>
+            <Text style={styles.emptyText}>{t("noDevicesInOrganisation")}</Text>
           </View>
         }
       />
 
-      {/* MODAL */}
       <Modal
         visible={modalOpen}
         transparent
-        animationType="fade"
+        animationType="none"
         onRequestClose={closeModal}
       >
-        <Pressable style={styles.modalOverlay} onPress={closeModal}>
-          <Pressable
-            style={styles.modalCard}
-            onPress={(e) => e.stopPropagation()}
+        <View
+          style={styles.modalOverlay}
+          pointerEvents={isClosing ? "none" : "auto"}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={closeModal} />
+
+          <Animated.View
+            style={[
+              styles.bottomSheet,
+              {
+                transform: [{ translateY: sheetY }],
+              },
+            ]}
           >
-            <Text style={styles.modalTitle}>{t("binDeviceTitle")}</Text>
+            <View style={styles.dragArea} {...sheetPan.panHandlers}>
+              <View style={styles.sheetHandle} />
+            </View>
 
-            <Text style={styles.modalLabel}>{t("deviceNameLabel")}</Text>
-            <TextInput
-              value={editName}
-              onChangeText={setEditName}
-              style={styles.modalInput}
-              editable={!busy}
-              placeholder={t("deviceNamePlaceholder")}
-              placeholderTextColor="#999"
-            />
+            <View style={styles.codeCard}>
+              <Text style={styles.codeLabel}>{t("deviceNameLabel")}</Text>
+              <Text style={styles.codeValue}>
+                {selected?.device_name ?? t("noName")}
+              </Text>
+            </View>
 
-            <View style={styles.modalRow}>
+            <View style={styles.infoStack}>
+              <View style={styles.statCardFull}>
+                <Text style={styles.statLabel}>{t("statusLabel")}</Text>
+                <Text style={styles.statValue}>{selected?.status ?? "-"}</Text>
+              </View>
+
+              <View style={styles.statCardFull}>
+                <Text style={styles.statLabel}>ID</Text>
+                <Text style={styles.statValue} numberOfLines={1}>
+                  {selected?.device_id ?? "-"}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.modalActions}>
               <Pressable
-                style={[
-                  styles.modalBtn,
-                  styles.modalBtnGhost,
-                  busy && { opacity: 0.6 },
-                ]}
+                style={styles.cancelBtn}
                 onPress={closeModal}
                 disabled={busy}
               >
-                <Text style={styles.modalBtnGhostText}>{t("cancel")}</Text>
+                <Text style={styles.cancelBtnText}>{t("cancel")}</Text>
               </Pressable>
 
               <Pressable
-                style={[
-                  styles.modalBtn,
-                  styles.modalBtnPrimary,
-                  busy && { opacity: 0.6 },
-                ]}
-                onPress={saveEdit}
+                style={[styles.actionBtn, busy && { opacity: 0.6 }]}
+                onPress={deleteBin}
                 disabled={busy}
               >
-                <Text style={styles.modalBtnPrimaryText}>
-                  {busy ? t("saving") : t("save")}
-                </Text>
+                {busy ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.actionBtnText}>
+                    {t("removeBinTitle")}
+                  </Text>
+                )}
               </Pressable>
             </View>
-
-            <Pressable
-              style={[styles.modalDanger, busy && { opacity: 0.6 }]}
-              onPress={deleteBin}
-              disabled={busy}
-            >
-              <Text style={styles.modalDangerText}>
-                {t("removeBinFromOrg")}
-              </Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
+          </Animated.View>
+        </View>
       </Modal>
     </View>
   );
@@ -444,7 +549,13 @@ const styles = StyleSheet.create({
     paddingTop: vh(2),
     backgroundColor: "white",
   },
-  centered: { flex: 1, justifyContent: "center", alignItems: "center" },
+
+  centered: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
   error: {
     color: "red",
     fontSize: fs(16),
@@ -453,14 +564,16 @@ const styles = StyleSheet.create({
   },
 
   searchInput: {
-    height: vh(8),
-    borderRadius: vw(2),
-    borderWidth: 1,
-    borderColor: "#E2E2E2",
-    paddingHorizontal: vw(4),
-    fontSize: fs(16),
+    height: Math.max(vh(6.2), 46),
     backgroundColor: "#F6F6F6",
-    marginBottom: vh(1.5),
+    borderRadius: Math.max(vw(2.2), 8),
+    borderColor: "#E2E2E2",
+    borderWidth: 1,
+    paddingHorizontal: vw(4.2),
+    marginTop: vh(1.6),
+    marginBottom: vh(1.6),
+    color: "black",
+    fontSize: fs(16),
   },
 
   header: {
@@ -479,8 +592,65 @@ const styles = StyleSheet.create({
     marginBottom: vh(1.5),
   },
 
-  deviceName: { fontSize: fs(18), fontWeight: "bold" },
-  statusText: { fontSize: fs(14), color: "gray", marginTop: vh(0.5) },
+  cardOnline: {
+    backgroundColor: "white",
+  },
+
+  cardOffline: {
+    backgroundColor: "#F3F3F3",
+    opacity: 0.85,
+  },
+
+  cardTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+
+  statusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 99,
+  },
+
+  dotOnline: {
+    backgroundColor: "#2ECC71",
+  },
+
+  dotOffline: {
+    backgroundColor: "#9E9E9E",
+  },
+
+  statusPillText: {
+    fontSize: fs(12),
+    fontWeight: "800",
+    color: "#111",
+  },
+
+  offlineText: {
+    color: "#777",
+  },
+
+  offlineSubText: {
+    color: "#888",
+  },
+
+  deviceName: {
+    fontSize: fs(18),
+    fontWeight: "bold",
+  },
+
+  statusText: {
+    fontSize: fs(14),
+    color: "gray",
+    marginTop: vh(0.5),
+  },
 
   progressRow: {
     flexDirection: "row",
@@ -488,9 +658,18 @@ const styles = StyleSheet.create({
     marginTop: vh(1.5),
   },
 
+  offlineRow: {
+    opacity: 0.9,
+  },
+
   progressItem: {
     width: "24%",
     alignItems: "center",
+  },
+
+  progressValue: {
+    fontSize: fs(12),
+    fontWeight: "900",
   },
 
   tankLabel: {
@@ -499,78 +678,140 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
+  emptyWrap: {
+    paddingTop: 40,
+    alignItems: "center",
+  },
+
+  emptyText: {
+    color: "#777",
+    fontWeight: "600",
+  },
+
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
-    justifyContent: "center",
-    paddingHorizontal: 18,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.28)",
   },
-  modalCard: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#EAEAEA",
+
+  modalBackdrop: {
+    flex: 1,
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "900",
-    marginBottom: 12,
-    color: "#111",
+
+  bottomSheet: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 18,
+    minHeight: 300,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 12,
   },
-  modalLabel: {
+
+  dragArea: {
+    paddingTop: 8,
+    paddingBottom: 10,
+    alignItems: "center",
+  },
+
+  sheetHandle: {
+    width: 46,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: "#D7D7DC",
+  },
+
+  codeCard: {
+    backgroundColor: "#FF9627",
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 14,
+    borderWidth: 1.2,
+    borderColor: "#FF9627",
+  },
+
+  codeLabel: {
     fontSize: 13,
+    color: "white",
     fontWeight: "800",
-    color: "#333",
+    marginBottom: 4,
+  },
+
+  codeValue: {
+    fontSize: 20,
+    color: "white",
+    fontWeight: "900",
+  },
+
+  infoStack: {
+    gap: 12,
+    marginBottom: 20,
+  },
+
+  statCardFull: {
+    backgroundColor: "white",
+    borderColor: "#FF9627",
+    borderWidth: 1.2,
+    borderRadius: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+  },
+
+  statLabel: {
+    fontSize: 13,
+    color: "#6F6F6F",
+    fontWeight: "700",
     marginBottom: 6,
   },
-  modalInput: {
-    height: 46,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#E2E2E2",
-    paddingHorizontal: 12,
-    fontSize: 15,
-    backgroundColor: "#F6F6F6",
+
+  statValue: {
+    fontSize: 16,
+    color: "#111",
+    flexWrap: "nowrap",
+    fontWeight: "900",
   },
-  modalRow: {
+
+  modalActions: {
     flexDirection: "row",
-    gap: 10,
-    marginTop: 14,
+    gap: 12,
+    marginTop: 4,
   },
-  modalBtn: {
+
+  cancelBtn: {
     flex: 1,
-    height: 46,
-    borderRadius: 12,
+    height: 52,
+    borderRadius: 0,
+    borderWidth: 1.5,
+    borderColor: "#FF9627",
     alignItems: "center",
     justifyContent: "center",
-  },
-  modalBtnGhost: {
-    borderWidth: 1,
-    borderColor: "#DADADA",
     backgroundColor: "#fff",
   },
-  modalBtnGhostText: {
-    fontWeight: "900",
-    color: "#111",
+
+  cancelBtnText: {
+    color: "#FF9627",
+    fontWeight: "800",
+    fontSize: 15,
   },
-  modalBtnPrimary: {
-    backgroundColor: ORANGE,
-  },
-  modalBtnPrimaryText: {
-    fontWeight: "900",
-    color: "#fff",
-  },
-  modalDanger: {
-    height: 46,
-    borderRadius: 12,
-    backgroundColor: "#EF4444",
+
+  actionBtn: {
+    flex: 1,
+    height: 52,
+    borderRadius: 0,
+    backgroundColor: "#FF9627",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 12,
   },
-  modalDangerText: {
+
+  actionBtnText: {
     color: "#fff",
     fontWeight: "900",
+    fontSize: 15,
   },
 });
