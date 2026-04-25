@@ -17,7 +17,7 @@ export default function AdminMenuLayout() {
         headerShadowVisible: false,
         headerStyle: { backgroundColor: "#fff" },
 
-        // ✅ VŠADE: logo vľavo (namiesto šípky)
+        
         headerLeft: () => (
           <View style={styles.headerItem}>
             <Image
@@ -43,7 +43,7 @@ export default function AdminMenuLayout() {
         ),
         headerRightContainerStyle: { paddingRight: s(12) },
 
-        // ✅ vypne default back šípku (ak by ju RN chcel zobraziť)
+        
         headerBackVisible: false,
       }}
     >

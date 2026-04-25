@@ -52,9 +52,9 @@ const fs = (b: number) => Math.max(12, (b * W) / 375);
 const getTankColor = (value: number, isOnline: boolean) => {
   if (!isOnline) return "#BDBDBD";
 
-  if (value <= 25) return "#2ECC71"; // zelená
-  if (value <= 79) return "#F7941D"; // oranžová
-  return "#FF3B30"; // červená
+  if (value <= 25) return "#2ECC71"; 
+  if (value <= 79) return "#F7941D"; 
+  return "#FF3B30"; 
 };
 const TANK_TYPE_KEYS: Record<
   number,

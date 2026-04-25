@@ -52,7 +52,6 @@ export default function StreetListScreen() {
     setError(null);
 
     try {
-      // OPRAVA: filtrujeme aj podľa organizácie (rovnako ako CityListScreen)
       const { data, error } = await supabase
         .from("bin_full_info")
         .select("name_street, status, nazov_org")
@@ -115,7 +114,6 @@ export default function StreetListScreen() {
   useEffect(() => {
     if (!profile?.id_org) return;
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [city, profile?.id_org]);
 
   const onRefresh = async () => {
@@ -185,7 +183,6 @@ export default function StreetListScreen() {
         </View>
       )}
 
-      {/* SEARCH BAR */}
       <View style={styles.searchContainer}>
         <TextInput
           placeholder={t("searchStreet")}
@@ -196,7 +193,6 @@ export default function StreetListScreen() {
         />
       </View>
 
-      {/* HEADER */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>
           {organisationName ? `${organisationName} / ${city}` : city}
@@ -206,7 +202,6 @@ export default function StreetListScreen() {
       <View style={{ paddingHorizontal: vw(5), paddingVertical: vw(2.4) }}>
         <Text style={{ fontSize: 14, fontWeight: "bold" }}>Ulica</Text>
       </View>
-      {/* LIST */}
       <View style={styles.list}>
         {filteredStreets.map((street) => (
           <Link

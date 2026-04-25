@@ -43,15 +43,15 @@ export default function AddOrganisationScreen() {
   const { t } = useLanguage();
   const mapRef = useRef<MapView | null>(null);
 
-  // form
+  
   const [orgName, setOrgName] = useState("");
   const [description, setDescription] = useState("");
 
-  // HQ address fields (required for RPC)
+  
   const [city, setCity] = useState("");
   const [street, setStreet] = useState("");
 
-  // country dropdown
+  
   const [countries, setCountries] = useState<CountryRow[]>([]);
   const [countriesLoading, setCountriesLoading] = useState(false);
   const [countriesRefreshing, setCountriesRefreshing] = useState(false);
@@ -61,14 +61,14 @@ export default function AddOrganisationScreen() {
     null,
   );
 
-  // location (optional)
+ 
   const [lat, setLat] = useState<string>("");
   const [lng, setLng] = useState<string>("");
 
-  // map modal
+  
   const [mapOpen, setMapOpen] = useState(false);
 
-  // company code
+  
   const [companyCode, setCompanyCode] = useState<string>("");
 
   const [saving, setSaving] = useState(false);
@@ -88,7 +88,7 @@ export default function AddOrganisationScreen() {
     if (!city.trim()) return false;
     if (!street.trim()) return false;
 
-    // coords optional, but if one is filled, both must be valid numbers
+
     const anyCoord = lat.trim() !== "" || lng.trim() !== "";
     if (anyCoord && !coords) return false;
 
@@ -147,7 +147,7 @@ export default function AddOrganisationScreen() {
         .eq("company_code", code)
         .limit(1);
 
-      // ak check padne, neblokuj usera
+      
       if (error) {
         setCompanyCode(code);
         return code;
@@ -470,7 +470,7 @@ export default function AddOrganisationScreen() {
         </View>
       </Modal>
 
-      {/* MAP MODAL (bez vyhľadávania) */}
+      
       <Modal
         visible={mapOpen}
         animationType="slide"

@@ -21,9 +21,7 @@ import {
   View,
 } from "react-native";
 
-/* =====================
-   RESPONSIVE HELPERS
-===================== */
+
 const { width: W, height: H } = Dimensions.get("window");
 const vw = (p: number) => (W * p) / 100;
 const vh = (p: number) => (H * p) / 100;
@@ -55,7 +53,6 @@ export default function AdminSettings() {
     try {
       await Updates.reloadAsync();
     } catch {
-      // fallback: nič – AuthProvider to aj tak dotlačí
     }
   };
 
@@ -72,9 +69,7 @@ export default function AdminSettings() {
     }, 60);
   };
 
-  /* =====================
-     LANGUAGE SHEET
-  ===================== */
+  
   const openLang = () => {
     if (isClosing) return;
     setLangMounted(true);
@@ -122,9 +117,7 @@ export default function AdminSettings() {
     reloadWholeApp();
   };
 
-  /* =====================
-     LOGOUT
-  ===================== */
+
   const handleLogout = async () => {
     if (logoutLoading) return;
 
@@ -298,9 +291,7 @@ export default function AdminSettings() {
   );
 }
 
-/* =====================
-   STYLES
-===================== */
+
 const styles = StyleSheet.create({
   container: {
     flexGrow: 1,

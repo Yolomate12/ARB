@@ -11,7 +11,6 @@ export default function MainPage() {
 
   return (
     <View style={styles.container}>
-      {/* Horná časť - logo a text */}
       <View style={styles.content}>
         <Image
           style={styles.logo}
@@ -24,7 +23,6 @@ export default function MainPage() {
         </View>
       </View>
 
-      {/* Spodná časť - tlačidlo */}
       <View style={styles.footer}>
         <WButton
           onPress={LogIn}
@@ -48,15 +46,15 @@ const scale = width / 375;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "space-between", // rozdelí horný a dolný blok
+    justifyContent: "space-between", 
     alignItems: "center",
     backgroundColor: "#fff",
-    paddingVertical: height * 0.05, // mierny okraj zhora a zdola
+    paddingVertical: height * 0.05, 
   },
   content: {
     alignItems: "center",
     justifyContent: "center",
-    flex: 1, // zaberie zvyšný priestor
+    flex: 1, 
   },
   containerSignUp: {
     flexDirection: "row",
@@ -95,7 +93,7 @@ const styles = StyleSheet.create({
     width: "100%",
     gap: 13,
     alignItems: "center",
-    marginBottom: height * 0.05, // medzera od spodku obrazovky
+    marginBottom: height * 0.05, 
   },
 
   button_LogIn: {

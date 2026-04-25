@@ -22,9 +22,7 @@ import {
   View,
 } from "react-native";
 
-/* =====================
-   TYPES
-===================== */
+
 type DeviceStatus = {
   onlineCount: number;
   offlineCount: number;
@@ -40,9 +38,7 @@ type Bin = {
   name_city: string | null;
 };
 
-/* =====================
-   RESPONSIVE HELPERS
-===================== */
+
 const { width: W, height: H } = Dimensions.get("window");
 const vw = (p: number) => (W * p) / 100;
 const vh = (p: number) => (H * p) / 100;
@@ -85,9 +81,7 @@ export default function TabTwoScreen() {
 
   const [currentOrgId, setCurrentOrgId] = useState<number | null>(null);
 
-  /* =====================
-     ANIMATIONS (3 sheets)
-  ===================== */
+
   const notifY = useRef(new Animated.Value(0)).current;
   const joinY = useRef(new Animated.Value(0)).current;
   const langY = useRef(new Animated.Value(0)).current;
@@ -119,9 +113,7 @@ export default function TabTwoScreen() {
     }
   };
 
-  /* =====================
-     LOGOUT
-  ===================== */
+
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
@@ -132,9 +124,6 @@ export default function TabTwoScreen() {
     }
   };
 
-  /* =====================
-     NOTIFICATIONS SHEET
-  ===================== */
   const openNotifications = () => {
     if (isClosing) return;
     setNotificationsMounted(true);
@@ -173,9 +162,7 @@ export default function TabTwoScreen() {
     }),
   ).current;
 
-  /* =====================
-     JOIN SHEET
-  ===================== */
+ 
   const openJoin = () => {
     if (isClosing) return;
     setJoinError(null);
@@ -216,9 +203,7 @@ export default function TabTwoScreen() {
     }),
   ).current;
 
-  /* =====================
-     LANGUAGE SHEET
-  ===================== */
+  
   const openLang = () => {
     if (isClosing) return;
     setLangMounted(true);
@@ -268,9 +253,7 @@ export default function TabTwoScreen() {
     }, 200);
   };
 
-  /* =====================
-     HELPERS
-  ===================== */
+
   const fetchProfileOrgId = async (): Promise<number | null> => {
     if (!session?.user?.id) return null;
 
@@ -284,9 +267,7 @@ export default function TabTwoScreen() {
     return profile?.id_org ?? null;
   };
 
-  /* =====================
-     JOIN COMPANY RPC
-  ===================== */
+
   const handleJoinCompany = async () => {
     const code = joinCode.trim().toUpperCase();
     if (!code) return;
@@ -329,9 +310,6 @@ export default function TabTwoScreen() {
     }, 200);
   };
 
-  /* =====================
-     FETCH DATA
-  ===================== */
   const refetch = async (opts?: { silent?: boolean }) => {
     if (!session?.user?.id) return;
 
@@ -386,7 +364,6 @@ export default function TabTwoScreen() {
 
   useEffect(() => {
     refetch();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.user?.id]);
 
   const onRefresh = async () => {

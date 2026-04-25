@@ -46,7 +46,7 @@ export default function MenuStack() {
 
 const styles = StyleSheet.create({
   headerItem: {
-    height: s(40), // responzívne
+    height: s(40), 
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: s(10),

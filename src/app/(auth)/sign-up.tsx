@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   eye: {
     position: "absolute",
     right: 15,
-    top: (width * 0.14) / 2 - 5.5, // presný stred podľa výšky inputu
+    top: (width * 0.14) / 2 - 5.5, 
   },
 
   textButton: {

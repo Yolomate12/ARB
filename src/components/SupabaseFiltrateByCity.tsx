@@ -33,7 +33,6 @@ const { width: W, height: H } = Dimensions.get("window");
 const vw = (p: number) => (W * p) / 100;
 const vh = (p: number) => (H * p) / 100;
 
-// jemná typografia viazaná len na width
 const fs = (base: number) => Math.max(12, (base * W) / 375);
 
 export default function CityListScreen() {
@@ -122,7 +121,6 @@ export default function CityListScreen() {
   useEffect(() => {
     if (!profile?.id_org) return;
     fetchCities();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile?.id_org]);
 
   const onRefresh = async () => {
@@ -185,7 +183,7 @@ export default function CityListScreen() {
     );
   }
 
-  const mapHeight = Math.min(vh(32), 320); // responsive cez height
+  const mapHeight = Math.min(vh(32), 320); 
   const orgMinHeight = Math.max(vh(52), 360);
 
   return (
@@ -196,7 +194,7 @@ export default function CityListScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      {/* SEARCHBAR */}
+      
       <View style={styles.section}>
         <TextInput
           placeholder={t("searchCityStreet")}
@@ -207,7 +205,7 @@ export default function CityListScreen() {
         />
       </View>
 
-      {/* MAPA */}
+    
       {filteredCities.length > 0 && (
         <MapView
           ref={mapRef}
@@ -233,7 +231,7 @@ export default function CityListScreen() {
         </MapView>
       )}
 
-      {/* ORGANIZÁCIA */}
+      
       <View
         style={[
           styles.bottomSection,
@@ -245,7 +243,7 @@ export default function CityListScreen() {
 
         <Text style={styles.branchesTitle}>{t("yourBranches")}</Text>
 
-        {/* ZOZNAM MIEST */}
+        
         <View style={{ marginTop: vh(1.5) }}>
           {filteredCities.map((city) => (
             <Link
@@ -294,14 +292,14 @@ export default function CityListScreen() {
         ) : null}
       </View>
 
-      {/* LOADING */}
+      
       {loading && (
         <View style={styles.center}>
           <ActivityIndicator size="large" />
         </View>
       )}
 
-      {/* ERROR */}
+      
       {error && (
         <View style={styles.center}>
           <Text style={{ color: "red", fontSize: fs(14) }}>

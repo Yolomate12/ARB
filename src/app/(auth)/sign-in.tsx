@@ -16,7 +16,7 @@ import {
 import Colors from "../../constants/Colors";
 
 const SignInScreen = () => {
-  const router = useRouter(); // nechávam, aj keď ho tu priamo nepoužívaš
+  const router = useRouter(); 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -40,8 +40,7 @@ const SignInScreen = () => {
       Alert.alert(error.message);
     }
 
-    // ❗ ŽIADEN router.push TU
-    // AuthProvider + AuthGate to vyrieši
+  
     setLoading(false);
   };
 
@@ -199,7 +198,6 @@ const styles = StyleSheet.create({
     height: width * 0.14,
   },
 
-  // 👁 wrapper + eye button
   passwordWrap: {
     position: "relative",
   },

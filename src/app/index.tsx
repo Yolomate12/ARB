@@ -8,19 +8,19 @@ export default function Index() {
   const router = useRouter();
 
   useEffect(() => {
-    // ⏳ Počkaj, kým sa načíta profil a skončí loading
+    
     if (loading) return;
 
-    // 🚪 Ak nie je používateľ prihlásený, pošli ho na sign-in
+    
     if (!session) {
       router.replace("/mainPage");
       return;
     }
 
-    // ⚙️ Keď profil ešte nie je načítaný, nepresmeruj
+    
     if (!profile) return;
 
-    // 👑 Presmeruj podľa roly
+    
     if (isAdmin) {
       router.replace("/(admin)/menu/items");
     } else {
@@ -28,7 +28,7 @@ export default function Index() {
     }
   }, [session, loading, profile, isAdmin]);
 
-  // ⏱️ Zatiaľ zobraz loading
+
   return (
     <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
       <ActivityIndicator size="large" />

@@ -138,19 +138,19 @@ export default function NewDeviceScreen() {
 
   const [error, setError] = useState<string | null>(null);
 
-  // devices
+  
   const [deviceOptions, setDeviceOptions] = useState<Option[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<Option | null>(null);
 
-  // orgs
+  
   const [orgOptions, setOrgOptions] = useState<Option[]>([]);
   const [selectedOrg, setSelectedOrg] = useState<Option | null>(null);
 
-  // address
+
   const [street, setStreet] = useState("");
   const [city, setCity] = useState("");
 
-  // countries dropdown
+
   const [countries, setCountries] = useState<CountryRow[]>([]);
   const [countriesLoading, setCountriesLoading] = useState(true);
   const [countriesRefreshing, setCountriesRefreshing] = useState(false);
@@ -322,7 +322,7 @@ export default function NewDeviceScreen() {
       setSelectedCountry(null);
       setCountrySearch("");
 
-      // refresh available devices (to reflect that device got assigned)
+  
       await loadAvailableDevices();
 
       Alert.alert(t("doneTitle"), `${t("binCreated")} (bin id: ${binId}).`);
@@ -352,7 +352,6 @@ export default function NewDeviceScreen() {
     loadOrganisations();
     loadAvailableDevices();
     loadCountries();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const countryLabel = selectedCountry

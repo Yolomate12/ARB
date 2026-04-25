@@ -52,8 +52,8 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: false, // header rieši Stack
-        tabBarStyle: { display: "none" }, // tabs sú skryté
+        headerShown: false, 
+        tabBarStyle: { display: "none" }, 
       }}
     >
       {/* root – skrytý */}
