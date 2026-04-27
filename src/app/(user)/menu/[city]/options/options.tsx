@@ -32,7 +32,7 @@ type Bin = {
   id_org: number;
   nazov_org: string | null;
   status: string | null;
-  naplnenie: number | string | null;
+  max_naplnenie: number | string | null;
   name_street: string | null;
   name_city: string | null;
 };
@@ -335,7 +335,7 @@ export default function TabTwoScreen() {
           id_org,
           nazov_org,
           status,
-          naplnenie,
+          max_naplnenie,
           name_street,
           name_city
         `,
@@ -356,7 +356,7 @@ export default function TabTwoScreen() {
         offlineCount: bins.filter((b) => b.status === "offline").length,
       });
 
-      setBinsOverLimit(bins.filter((b) => Number(b.naplnenie ?? 0) >= 80));
+      setBinsOverLimit(bins.filter((b) => Number(b.max_naplnenie ?? 0) >= 80));
     } finally {
       if (!silent) setLoading(false);
     }
@@ -550,7 +550,7 @@ export default function TabTwoScreen() {
                           {bin.name_city ?? ""}
                         </Text>
                         <Text style={styles.binPercent}>
-                          {Math.round(Number(bin.naplnenie ?? 0))} %
+                          {Math.round(Number(bin.max_naplnenie ?? 0))} %
                         </Text>
                       </View>
                     ))
@@ -709,8 +709,10 @@ const styles = StyleSheet.create({
 
   organization: {
     marginTop: vh(1.4),
+    marginHorizontal: vw(1.5),
     fontSize: fs(18),
     fontWeight: "600",
+    textAlign: "center",
   },
 
   listItem: {
