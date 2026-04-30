@@ -5,9 +5,9 @@ from ultralytics import YOLO
 from picamera2 import Picamera2
 from gpiozero import DigitalOutputDevice
 
-# ==================================================
+
 # MOTOR – NEMA17 (STEP / DIR) cez gpiozero
-# ==================================================
+
 DIR_PIN = 7
 STEP_PIN = 20
 EN_PIN = 9
@@ -15,7 +15,7 @@ GPIO = 14
 
 DIR = DigitalOutputDevice(DIR_PIN)
 STEP = DigitalOutputDevice(STEP_PIN)
-EN = DigitalOutputDevice(EN_PIN, active_high=False)  # LOW = enable
+EN = DigitalOutputDevice(EN_PIN, active_high=False)
 EN.on()
 
 STEPS_PER_REV = 1600
@@ -23,7 +23,7 @@ STEP_DELAY = 0.0005
 STOP_US = 1500
 RUN_US = 1350
 
-# ČAS PRE 90°
+
 TIME_90 = 1.05
 
 h = lgpio.gpiochip_open(0)
@@ -48,25 +48,25 @@ def rotate_motor(degrees):
         time.sleep(STEP_DELAY)
 
 
-# ==================================================
+
 # YOLO NCNN MODEL
-# ==================================================
-MODEL_PATH = "waste_detection_2_ncnn_model"  # priečinok s .param/.bin
-CONF_THRESH = 0.5
+
+MODEL_PATH = "soc_model_2_ncnn_model"
+CONF_THRESH = 0.7
 
 model = YOLO(MODEL_PATH, task="detect")
 labels = model.names
 
-# ===== PRISPÔSOB PODĽA SVOJHO MODELU =====
+
 PAPER_CLASSES = ["papier", "servitka"]
 PLASTIC_CLASSES = ["plast", "plast_obal", "sacok"]
 METAL_CLASSES = ["plechovka", "jogurt_alu"]
 KOMUNAL_CLASSES = ["guma", "salka"]
 
 
-# ==================================================
+
 # PICAMERA2
-# ==================================================
+
 picam = Picamera2()
 picam.configure(
     picam.create_preview_configuration(
@@ -81,9 +81,8 @@ print(" Q      → ukončiť program")
 print("======================================\n")
 
 
-# ==================================================
-# HLAVNÝ CYKLUS
-# ==================================================
+
+
 try:
     while True:
         frame = picam.capture_array()
@@ -119,9 +118,7 @@ try:
                 elif class_name in KOMUNAL_CLASSES:
                     material = "komunal"
 
-            # ==================================================
-            # ROZHODNUTIE – UHOL MOTORA
-            # ==================================================
+
             if material == "papier":
                 angle = -810
             elif material == "plast":
@@ -152,9 +149,6 @@ try:
             print("Motor vrátený do 0°\n")
 
 finally:
-    # ==================================================
-    # CLEANUP
-    # ==================================================
     print("Ukončujem program...")
     lgpio.tx_servo(h, GPIO, 0)
     lgpio.gpiochip_close(h)
