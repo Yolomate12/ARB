@@ -13,7 +13,7 @@ def get_pi_serial():
 DEVICE_NAME = get_pi_serial()
 
 SUPABASE_URL = "https://heahkxgngnnhugdsurfl.supabase.co/rest/v1/devices"
-SERVICE_ROLE_KEY = "sb_publishable_aeDyK6nTKjbQPrUiZ7prog_mxaMkBPp"  # ⚠️ NEPOSIELAJ PUBLISHABLE KEY
+SERVICE_ROLE_KEY = "sb_publishable_aeDyK6nTKjbQPrUiZ7prog_mxaMkBPp"
 
 data = {
     "name": DEVICE_NAME,
@@ -26,8 +26,6 @@ headers = {
     "Content-Type": "application/json",
     "Prefer": "return=representation"
 }
-
-# Upsert: vloží nové zariadenie alebo aktualizuje existujúce
 try:
     response = requests.post(
         f"{SUPABASE_URL}?on_conflict=name",
